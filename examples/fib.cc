@@ -8,13 +8,11 @@ task(int, fib, int i){
   return x.get() + y.get();
 }
 
-task(int, toplevel){
+task(void, toplevel){
   int n = 15;
   printf("fib(%d) = %d\n", n, call(fib, n).get()); 
-  return 0; 
 }
 
 int main(int argc, char** argv){
   start(toplevel, argc, argv);
-  return 0;
 }

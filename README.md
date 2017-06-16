@@ -3,14 +3,13 @@ equites
 
 High level, type-safe interface to legion. 
 
-```
+```cpp
 task(void, print){
   printf("hello world\n");
 }
 
 int main(int argc, char** argv){
   start(print, argc, argv);
-  return 0;
 }
 ```
 

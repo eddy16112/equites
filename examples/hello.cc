@@ -7,6 +7,5 @@ task(void, print){
 
 int main(int argc, char** argv){
   start(print, argc, argv);
-  return 0;
 }
 
