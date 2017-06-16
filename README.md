@@ -27,4 +27,5 @@ See `examples/` for example usage. Running `make` will build all examples.
 - Inline mapping
 - Iterators
 - Reductions
+- Unstructured regions
 
