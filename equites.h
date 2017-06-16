@@ -61,6 +61,7 @@ struct _region{
   LogicalRegion parent; 
   const static legion_privilege_mode_t pm = NO_ACCESS;  
   const static legion_coherence_property_t cp = EXCLUSIVE; 
+  RegionAccessor<AccessorType::Generic, a> acc;  
 };
 
 template <typename a, size_t ndim>
@@ -71,9 +72,13 @@ struct r_region : virtual _region<a, ndim> {
     return req; 
   };
   a read(Point<ndim> i){
-    RegionAccessor<AccessorType::Generic, a> acc = this->p.get_field_accessor(OnlyField).template typeify<a>(); 
-    return acc.read(DomainPoint::from_point<ndim>(i));
+    return this->acc.read(DomainPoint::from_point<ndim>(i));
   };
+  void setPhysical(PhysicalRegion &p){
+    this->p = p;
+    this->acc = this->p.get_field_accessor(OnlyField).template typeify<a>();
+  }
+
   r_region(){};
   const static legion_privilege_mode_t pm = READ_ONLY;  
 };
@@ -86,8 +91,11 @@ struct w_region : virtual _region<a, ndim> {
     return req; 
   };
   void write(Point<ndim> i, a x) {
-    RegionAccessor<AccessorType::Generic, a> acc = this->p.get_field_accessor(OnlyField).template typeify<a>(); 
-    return acc.write(DomainPoint::from_point<ndim>(i), x); 
+    this->acc.write(DomainPoint::from_point<ndim>(i), x); 
+  }
+  void setPhysical(PhysicalRegion &p){
+    this->p = p;
+    this->acc = this->p.get_field_accessor(OnlyField).template typeify<a>();
   }
   const static legion_privilege_mode_t pm = WRITE_ONLY;  
 };
@@ -107,9 +115,11 @@ struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
     all.allocate_field(sizeof(a), OnlyField);
     this->l = c.runtime->create_logical_region(c.ctx, is, fs);
     this->parent = this->l; 
-    //InlineLauncher launch(this->rr()); 
-    //this->p = c.runtime->map_region(c.ctx, launch); 
   }; 
+  void setPhysical(PhysicalRegion &p){
+    this->p = p;
+    this->acc = this->p.get_field_accessor(OnlyField).template typeify<a>();
+  }
   const static legion_privilege_mode_t pm = READ_WRITE;
 };
 
@@ -151,7 +161,7 @@ template <typename a, size_t ndim, template <typename, size_t> class t>
 inline typename enable_if<is_base_of<_region<a,ndim>, t<a,ndim>>::value, int>::type
 bindPhysical(vector<PhysicalRegion> v, size_t i, t<a,ndim> *r){
   // printf("mapped region %d", i); 
-  r->p = v[i];    
+  r->setPhysical(ref(v[i]));    
   return i+1; 
 };
 
