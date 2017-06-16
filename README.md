@@ -16,13 +16,13 @@ int main(int argc, char** argv){
 
 See `examples/` for example usage. Running `make` will build all examples.
 
-# Features
+## Features
 - Type safe legion calls
 - Type safe region semantic
 - Automatic management of region arguments
 - Regent-like syntax
 
-# TODO
+## TODO
 - Partitioning
 - Field spaces
 - Inline mapping
