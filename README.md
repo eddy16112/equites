@@ -17,7 +17,7 @@ See `examples/` for example usage. Running `make` will build all examples.
 
 ## Features
 - Type safe legion calls
-- Type safe region semantic
+- Type safe region semantics
 - Automatic management of region arguments
 - Regent-like syntax
 
