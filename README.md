@@ -26,4 +26,5 @@ See `examples/` for example usage. Running `make` will build all examples.
 - Field spaces
 - Inline mapping
 - Iterators
+- Reductions
 
