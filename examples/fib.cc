@@ -9,7 +9,7 @@ task(int, fib, int i){
 }
 
 task(void, toplevel){
-  printf("fib(%d) = %d\n", n, call(fib, 15).get()); 
+  printf("fib(%d) = %d\n", 15, call(fib, 15).get()); 
 }
 
 int main(int argc, char** argv){
