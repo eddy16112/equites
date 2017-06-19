@@ -10,16 +10,20 @@ using namespace LegionRuntime::Accessor;
 
 // Global id that is indexed for tasks
 static TaskID globalId = 0;
-const static unsigned OnlyField = 0; // TODO: Add fields
+// Only have one field currently.  
+const static unsigned OnlyField = 0; 
 
-// We define two helper macros. `task` defines a task, while `call` calls a
-// task. These aren't strictly necessary, but are nice in that they hide the
-// task context from the user and make task declaration a slightly easier. 
+// We define three helper macros. `task` defines a task, while `call` calls a
+// task, and `region` creates a rw_region. These aren't strictly necessary, but
+// are nice in that they hide the task context from the user and make task
+// declaration a slightly easier. 
 #define task(type, name, args...) \
   type _##name (context _c, ## args); \
   _task<decltype(&_##name), _##name> name(#name); \
   type _##name (context _c, ## args) 
+// call simply hides the context as well
 #define call(f, args...) f._call(_c, ## args) 
+// Region hides the context call as well
 #define region(a, ndim, size) rw_region<a,ndim>(_c, size)
 
 /* A simple wrapper to avoid user-facing casting. */
@@ -31,15 +35,6 @@ struct future {
     Future fut;
 };
 
-/*
-struct point {
-  point(size_t i, size_t y, size_t z){
-    make_tuple(i...);
-    static_assert(ndim == tuple_size<dim...>::value, "Wrong number of dimensions for point");
-  }
-};
-*/
-
 // Simple wrapper for all needed context passed to tasks
 struct context {
   const Task *task;
@@ -47,7 +42,8 @@ struct context {
   Runtime *runtime;
 };
 
-// regions. _region is an abstract class
+// regions. 
+// _region is an abstract class
 template <typename a, size_t ndim>
 struct _region{
   RegionRequirement rr(){
@@ -64,6 +60,7 @@ struct _region{
   RegionAccessor<AccessorType::Generic, a> acc;  
 };
 
+// read only region
 template <typename a, size_t ndim>
 struct r_region : virtual _region<a, ndim> {
   RegionRequirement rr(){
@@ -83,6 +80,7 @@ struct r_region : virtual _region<a, ndim> {
   const static legion_privilege_mode_t pm = READ_ONLY;  
 };
 
+// write only region
 template <typename a, size_t ndim>
 struct w_region : virtual _region<a, ndim> {
   RegionRequirement rr(){
@@ -100,6 +98,7 @@ struct w_region : virtual _region<a, ndim> {
   const static legion_privilege_mode_t pm = WRITE_ONLY;  
 };
 
+// reada write region
 template <typename a, size_t ndim>
 struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
   RegionRequirement rr(){
@@ -142,6 +141,7 @@ struct function_traits<R (*) (context c, Args...)> {
   typedef R returnType;
   typedef tuple<Args...> args;
 };
+
 template<typename R, typename ...Args>
 struct function_traits<R (*) (Args...)> {
   static constexpr size_t nargs = sizeof...(Args);
