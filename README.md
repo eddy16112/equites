@@ -16,8 +16,8 @@ int main(int argc, char** argv){
 See `examples/` for example usage. Running `make` will build all examples.
 
 ## Features
-- Type safe legion calls
-- Type safe region semantics
+- Type-safe legion calls
+- Type-safe region semantics
 - Automatic management of region arguments
 - Regent-like syntax
 
