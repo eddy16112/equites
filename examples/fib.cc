@@ -9,8 +9,7 @@ task(int, fib, int i){
 }
 
 task(void, toplevel, int argc, char** argv){
-  int n = 15; 
-  if(argc > 2) n = atoi(argv[1]); 
+  int n  = argc > 2 ? atoi(argv[1]) : 15; 
   printf("fib(%d) = %d\n", n, call(fib, n).get()); 
 }
 
