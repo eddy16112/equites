@@ -13,7 +13,7 @@ using namespace LegionRuntime::Accessor;
 // Global id that is indexed for tasks
 static TaskID globalId = 0;
 // Only have one field currently.  
-const static unsigned OnlyField = 0; 
+const static size_t OnlyField = 0; 
 
 void point(){};
 Point<1> point(int i){ return i; }
@@ -49,9 +49,9 @@ struct context {
   Runtime *runtime;
 };
 
-template <unsigned ndim>
+template <size_t ndim>
 static Point<ndim> END(void) {
-  Point<ndim> z; for(unsigned i=0; i < ndim; i++) z.x[i] = -1; return z; 
+  Point<ndim> z; for(size_t i=0; i < ndim; i++) z.x[i] = -1; return z; 
 }
 
 /* regions. */
@@ -66,12 +66,12 @@ struct _region{
     Rect<ndim> r; 
     explicit iterator(const Rect<ndim> rect, Point<ndim> p) : pt(p), r(rect) {} ; 
     void step() {
-      for(unsigned i=0; i<ndim; i++){
+      for(size_t i=0; i<ndim; i++){
         if(++pt.x[i] <= r.hi.x[i]) return; 
         pt.x[i] = r.lo.x[i]; 
       }
       // If we fall through, set to pre-defined end() value
-      for(unsigned i=0; i<ndim; i++){
+      for(size_t i=0; i<ndim; i++){
         pt.x[i] = -1; 
       }
     }
