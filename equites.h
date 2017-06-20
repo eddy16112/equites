@@ -15,6 +15,11 @@ static TaskID globalId = 0;
 // Only have one field currently.  
 const static unsigned OnlyField = 0; 
 
+void point(){};
+Point<1> point(int i){ return i; }
+Point<2> point(int x, int y){ int a[2] = {x, y}; return Point<2>(a); }
+Point<3> point(int x, int y, int z){ int a[3] = {x, y, z}; return Point<3>(a); }
+
 // We define three helper macros. `task` defines a task, while `call` calls a
 // task, and `region` creates a rw_region. These aren't strictly necessary, but
 // are nice in that they hide the task context from the user and make task
@@ -44,6 +49,11 @@ struct context {
   Runtime *runtime;
 };
 
+template <unsigned ndim>
+static Point<ndim> END(void) {
+  Point<ndim> z; for(unsigned i=0; i < ndim; i++) z.x[i] = -1; return z; 
+}
+
 /* regions. */
 /* _region is an abstract class */
 template <typename a, size_t ndim>
@@ -51,11 +61,21 @@ struct _region{
   _region(){}; 
   _region(const Rect<ndim> r) : rect(r) {}; 
   class iterator: public std::iterator <input_iterator_tag, a, Point<ndim>> {
-    Point<ndim> pt; 
-    GenericPointInRectIterator<ndim> pir; 
     public: 
-    explicit iterator(const Rect<ndim> r, Point<ndim> p) : pt(p), pir(GenericPointInRectIterator<ndim>(r)) {} ; 
-    iterator& operator++() {pir.step(); pt = pir.p; return *this; }
+    Point<ndim> pt; 
+    Rect<ndim> r; 
+    explicit iterator(const Rect<ndim> rect, Point<ndim> p) : pt(p), r(rect) {} ; 
+    void step() {
+      for(unsigned i=0; i<ndim; i++){
+        if(++pt.x[i] <= r.hi.x[i]) return; 
+        pt.x[i] = r.lo.x[i]; 
+      }
+      // If we fall through, set to pre-defined end() value
+      for(unsigned i=0; i<ndim; i++){
+        pt.x[i] = -1; 
+      }
+    }
+    iterator& operator++() {step(); return *this; }
     iterator operator++(int) {iterator retval = *this; ++(*this); return retval; }
     bool operator==(iterator other) const { return pt == other.pt; }
     bool operator!=(iterator other) const { return !(*this == other); }
@@ -67,10 +87,12 @@ struct _region{
     req.add_field(OnlyField); 
     return req; 
   };
+
   void setPhysical(PhysicalRegion &p){
     this->p = p;
     this->acc = this->p.get_field_accessor(OnlyField).template typeify<a>();
   }
+
   RegionAccessor<AccessorType::Generic, a> acc; 
   PhysicalRegion p;
   LogicalRegion l; 
@@ -79,7 +101,7 @@ struct _region{
   const static legion_privilege_mode_t pm = NO_ACCESS;  
   const static legion_coherence_property_t cp = EXCLUSIVE; 
   iterator begin() { return iterator(rect, rect.lo); }
-  iterator end() { return iterator(rect, rect.hi); }
+  iterator end() { return iterator(rect, END<ndim>()); }
 };
 
 // read only region
@@ -120,7 +142,7 @@ struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
     req.add_field(OnlyField); 
     return req; 
   };
-  rw_region(context c, Point<ndim> p) : _region<a,ndim>(Rect<ndim>(Point<ndim>::ZEROES(), p)) {
+  rw_region(context c, Point<ndim> p) : _region<a,ndim>(Rect<ndim>(Point<ndim>::ZEROES(), p-Point<ndim>::ONES())) {
     //cout << "set rect to be from " << Point<ndim>::ZEROES() << " to " << this->rect.hi << endl; 
     IndexSpace is = c.runtime->create_index_space(c.ctx, Domain::from_rect<ndim>(this->rect));
     FieldSpace fs = c.runtime->create_field_space(c.ctx);
