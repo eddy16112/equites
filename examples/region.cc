@@ -2,15 +2,19 @@
 using namespace equites;
 
 task(void, printFirst, r_region<float, 1> r){
-  printf("%f\n", r.read(0));
+  for(auto i : r){
+    printf("%f\n", r.read(i));
+  }
 }
 
 task(void, init, w_region<float, 1> r){
-  r.write(0, 3.14159);
+  for(Point<1> i : r){
+    r.write(i, 3.14159);  
+  }
 }
 
 task(void, toplevel){
-  auto r = region(float, 1, 1);
+  auto r = region(float, 1, 4);
   call(init, r); 
   call(printFirst, r);
 }

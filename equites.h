@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <legion/legion.h>
 #include <functional>
+#include <iterator> 
+#include <algorithm>
 
 namespace equites { 
 using namespace std;
@@ -35,34 +37,55 @@ struct future {
     Future fut;
 };
 
-// Simple wrapper for all needed context passed to tasks
+/* Simple wrapper for all needed context passed to tasks */
 struct context {
   const Task *task;
   Context ctx;
   Runtime *runtime;
 };
 
-// regions. 
-// _region is an abstract class
+/* regions. */
+/* _region is an abstract class */
 template <typename a, size_t ndim>
 struct _region{
+  _region(){}; 
+  _region(const Rect<ndim> r) : rect(r) {}; 
+  class iterator: public std::iterator <input_iterator_tag, a, Point<ndim>> {
+    Point<ndim> pt; 
+    GenericPointInRectIterator<ndim> pir; 
+    public: 
+    explicit iterator(const Rect<ndim> r, Point<ndim> p) : pt(p), pir(GenericPointInRectIterator<ndim>(r)) {} ; 
+    iterator& operator++() {pir.step(); pt = pir.p; return *this; }
+    iterator operator++(int) {iterator retval = *this; ++(*this); return retval; }
+    bool operator==(iterator other) const { return pt == other.pt; }
+    bool operator!=(iterator other) const { return !(*this == other); }
+    Point<ndim> operator*() const { return pt; }
+  }; 
+
   RegionRequirement rr(){
     RegionRequirement req(this->l, this->pm, this->cp, this->parent); 
     req.add_field(OnlyField); 
     return req; 
   };
-  _region(){};
+  void setPhysical(PhysicalRegion &p){
+    this->p = p;
+    this->acc = this->p.get_field_accessor(OnlyField).template typeify<a>();
+  }
+  RegionAccessor<AccessorType::Generic, a> acc; 
   PhysicalRegion p;
   LogicalRegion l; 
   LogicalRegion parent; 
+  const Rect<ndim> rect; 
   const static legion_privilege_mode_t pm = NO_ACCESS;  
   const static legion_coherence_property_t cp = EXCLUSIVE; 
-  RegionAccessor<AccessorType::Generic, a> acc;  
+  iterator begin() { return iterator(rect, rect.lo); }
+  iterator end() { return iterator(rect, rect.hi); }
 };
 
 // read only region
 template <typename a, size_t ndim>
 struct r_region : virtual _region<a, ndim> {
+  r_region(){}; 
   RegionRequirement rr(){
     RegionRequirement req(this->l, this->pm, this->cp, this->parent); 
     req.add_field(OnlyField); 
@@ -71,18 +94,13 @@ struct r_region : virtual _region<a, ndim> {
   a read(Point<ndim> i){
     return this->acc.read(DomainPoint::from_point<ndim>(i));
   };
-  void setPhysical(PhysicalRegion &p){
-    this->p = p;
-    this->acc = this->p.get_field_accessor(OnlyField).template typeify<a>();
-  }
-
-  r_region(){};
   const static legion_privilege_mode_t pm = READ_ONLY;  
 };
 
 // write only region
 template <typename a, size_t ndim>
 struct w_region : virtual _region<a, ndim> {
+  w_region(){}; 
   RegionRequirement rr(){
     RegionRequirement req(this->l, this->pm, this->cp, this->parent); 
     req.add_field(OnlyField); 
@@ -91,14 +109,10 @@ struct w_region : virtual _region<a, ndim> {
   void write(Point<ndim> i, a x) {
     this->acc.write(DomainPoint::from_point<ndim>(i), x); 
   }
-  void setPhysical(PhysicalRegion &p){
-    this->p = p;
-    this->acc = this->p.get_field_accessor(OnlyField).template typeify<a>();
-  }
   const static legion_privilege_mode_t pm = WRITE_ONLY;  
 };
 
-// reada write region
+// read-write region
 template <typename a, size_t ndim>
 struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
   RegionRequirement rr(){
@@ -106,19 +120,15 @@ struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
     req.add_field(OnlyField); 
     return req; 
   };
-  rw_region(context c, Point<ndim> p){
-    Rect<ndim> rect(Point<ndim>::ZEROES(), p - Point<ndim>::ONES());
-    IndexSpace is = c.runtime->create_index_space(c.ctx, Domain::from_rect<ndim>(rect));
+  rw_region(context c, Point<ndim> p) : _region<a,ndim>(Rect<ndim>(Point<ndim>::ZEROES(), p)) {
+    //cout << "set rect to be from " << Point<ndim>::ZEROES() << " to " << this->rect.hi << endl; 
+    IndexSpace is = c.runtime->create_index_space(c.ctx, Domain::from_rect<ndim>(this->rect));
     FieldSpace fs = c.runtime->create_field_space(c.ctx);
     FieldAllocator all = c.runtime->create_field_allocator(c.ctx, fs);
     all.allocate_field(sizeof(a), OnlyField);
     this->l = c.runtime->create_logical_region(c.ctx, is, fs);
     this->parent = this->l; 
   }; 
-  void setPhysical(PhysicalRegion &p){
-    this->p = p;
-    this->acc = this->p.get_field_accessor(OnlyField).template typeify<a>();
-  }
   const static legion_privilege_mode_t pm = READ_WRITE;
 };
 
@@ -252,8 +262,14 @@ class _task {
   }
 };
 
-template <typename F, F f>
-int start(_task<F, f> t, int argc, char** argv){ 
+template <void (*f) (context)>
+int start(_task<void (*) (context), f> t, int argc, char** argv){ 
+  Runtime::set_top_level_task_id(t.id);
+  return Runtime::start(argc, argv);
+};
+
+template <void (*f) (context, int, char**)>
+int start(_task<void (*) (context, int, char**), f> t, int argc, char** argv){ 
   Runtime::set_top_level_task_id(t.id);
   return Runtime::start(argc, argv);
 };

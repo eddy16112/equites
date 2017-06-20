@@ -8,8 +8,10 @@ task(int, fib, int i){
   return x.get() + y.get();
 }
 
-task(void, toplevel){
-  printf("fib(%d) = %d\n", 15, call(fib, 15).get()); 
+task(void, toplevel, int argc, char** argv){
+  int n = 15; 
+  if(argc > 2) n = atoi(argv[1]); 
+  printf("fib(%d) = %d\n", n, call(fib, n).get()); 
 }
 
 int main(int argc, char** argv){
