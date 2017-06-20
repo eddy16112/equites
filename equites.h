@@ -15,7 +15,7 @@ static TaskID globalId = 0;
 // Only have one field currently.  
 const static size_t OnlyField = 0; 
 
-void point(){};
+// would be nice to make this generic for n dimensions
 Point<1> point(int i){ return i; }
 Point<2> point(int x, int y){ int a[2] = {x, y}; return Point<2>(a); }
 Point<3> point(int x, int y, int z){ int a[3] = {x, y, z}; return Point<3>(a); }

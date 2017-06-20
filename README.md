@@ -20,12 +20,12 @@ See `examples/` for example usage. Running `make` will build all examples.
 - Type-safe region semantics
 - Automatic management of region arguments
 - Regent-like syntax
+- C++ range based for loop
 
 ## TODO
 - Partitioning
 - Field spaces
 - Inline mapping
-- Iterators
 - Reductions
 - Unstructured regions
 
