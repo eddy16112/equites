@@ -1,7 +1,7 @@
 #include <equites.h>
 using namespace equites;
 
-task(void, printFirst, r_region<float, 1> r){
+task(void, print, r_region<float, 1> r){
   for(auto i : r){
     printf("%f\n", r.read(i));
   }
@@ -16,7 +16,7 @@ task(void, init, w_region<float, 1> r){
 task(void, toplevel){
   auto r = region(float, 1, 4);
   call(init, r); 
-  call(printFirst, r);
+  call(print, r);
 }
 
 int main(int argc, char** argv){
