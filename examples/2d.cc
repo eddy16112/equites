@@ -11,9 +11,8 @@ task(void, fillRegion, w_region<float, 2> r, float x){
 
 task(void, printRegion, const char* name, r_region<float, 2> r){
   cout << "for region " << name << endl; 
-  for(auto i : r){
+  for(auto i : r)
     cout << "  point " << i << " has value " << r.read(i) << endl; 
-  }
 }
 
 task(void, toplevel){
