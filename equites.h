@@ -155,12 +155,12 @@ struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
 };
 
 // Helper to apply a task to tuple 
-template <class T, class F, size_t... Is>
+template <typename T, typename F, size_t... Is>
 inline auto apply_impl(T t, F f, index_sequence<Is...>){
   return f(get<Is>(t)...);
 }
 
-template <class F, class T>
+template <typename F, typename T>
 inline auto apply(F f, T t){
   return apply_impl(t, f, make_index_sequence<tuple_size<T>{}>{});
 }
@@ -185,11 +185,11 @@ struct function_traits<R (*) (Args...)> {
 template <typename t> 
 inline int bindPhysical(vector<PhysicalRegion> v, size_t i, t x) { return i; }; 
 
-template <typename a, size_t ndim, template <typename, size_t> class t>
+template <typename a, size_t ndim, template <typename, size_t> typename t>
 inline typename enable_if<!is_base_of<_region<a,ndim>, t<a,ndim>>::value, int>::type
   bindPhysical(vector<PhysicalRegion> v, size_t i, t<a,ndim> *r){ return i; }; 
 
-template <typename a, size_t ndim, template <typename, size_t> class t>
+template <typename a, size_t ndim, template <typename, size_t> typename t>
 inline typename enable_if<is_base_of<_region<a,ndim>, t<a,ndim>>::value, int>::type
 bindPhysical(vector<PhysicalRegion> v, size_t i, t<a,ndim> *r){
   // printf("mapped region %d", i); 
@@ -225,11 +225,11 @@ mkLegionTask(const Task *task, const vector<PhysicalRegion>& rs, Context ctx, Ru
 template <typename t> 
 inline void registerRR(TaskLauncher &l, t r){ }; 
 
-template <typename a, size_t ndim, template <typename, size_t> class t>
+template <typename a, size_t ndim, template <typename, size_t> typename t>
 inline typename enable_if<!is_base_of<_region<a,ndim>, t<a,ndim>>::value, void>::type
 registerRR(TaskLauncher &l, t<a, ndim> r){ }; 
 
-template <typename a, size_t ndim, template <typename, size_t> class t>
+template <typename a, size_t ndim, template <typename, size_t> typename t>
 inline typename enable_if<is_base_of<_region<a,ndim>, t<a,ndim>>::value, void>::type
 registerRR(TaskLauncher &l, t<a, ndim> r){
   l.add_region_requirement(r.rr());    

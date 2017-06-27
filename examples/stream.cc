@@ -14,9 +14,9 @@ task(void, fillRegion, w_region<float, 1> a, float x){
 }
 
 task(void, toplevel, int argc, char** argv){
-  size_t size = argc > 1 ? atol(argv[1]) : 10000000;
+  size_t size = argc > 1 ? atol(argv[1]) : 1000000;
   size_t ntask = argc > 2 ? atol(argv[2]) : 4; 
-  size_t iters = argc > 3 ? atol(argv[3]) : 1000; 
+  size_t iters = argc > 3 ? atol(argv[3]) : 10; 
   for(size_t i=0; i<ntask; i++){
     auto a = region(float, 1, size); 
     auto b = region(float, 1, size); 

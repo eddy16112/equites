@@ -5,7 +5,7 @@ cflags=-std=c++14 -Wall -I${legion_install_dir}/include/legion \
 			 -I${legion_install_dir}/include/realm -I. -g
 CC=g++
 
-examples=examples/fib examples/hello examples/region examples/2d
+examples=examples/fib examples/hello examples/region examples/2d examples/stream
 
 all: ${examples}
 
