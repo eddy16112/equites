@@ -2,15 +2,8 @@
 using namespace equites;
 
 task(void, triad, size_t iters, float x, r_region<float, 1> a, r_region<float, 1> b, w_region<float, 1> c){
-  for(size_t iter = 0; iter < iters; iter++){
-    for(auto i : a){
-      c.write(i, a.read(i) * x + b.read(i));
-    }
-  }
-}
-
-task(void, fillRegion, w_region<float, 1> a, float x){
-  for(auto i : a) a.write(i, x);
+  for(size_t iter = 0; iter < iters; iter++) for(auto i : a)
+    c.write(i, a.read(i) * x + b.read(i));
 }
 
 task(void, toplevel, int argc, char** argv){
@@ -21,8 +14,8 @@ task(void, toplevel, int argc, char** argv){
     auto a = region(float, 1, size); 
     auto b = region(float, 1, size); 
     auto c = region(float, 1, size); 
-    call(fillRegion, a, 3.14159);
-    call(fillRegion, b, 1.71828);
+    call((fill<float,1>), a, 3.14159);
+    call((fill<float,1>), b, 1.71828);
     call(triad, iters, 1.61803, a, b, c);
   }
   std::cout << "Running " << size * ntask * iters * 3 * sizeof(float) << " memory operations" << std::endl; 

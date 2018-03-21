@@ -1,11 +1,11 @@
 #include <equites.h>
 using namespace equites;
 
-task(void, print){
+task(void, hello){
   printf("hello world\n");
 }
 
 int main(int argc, char** argv){
-  start(print, argc, argv);
+  start(hello, argc, argv);
 }
 

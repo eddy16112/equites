@@ -1,27 +1,15 @@
 #include <equites.h>
 using namespace equites;
 
-task(void, copyRegion, r_region<float, 2> r1, w_region<float, 2> r2){
-  for(auto i : r1) r2.write(i, r1.read(i)); 
-}
-
-task(void, fillRegion, w_region<float, 2> r, float x){
-  for(auto i : r) r.write(i, x);
-}
-
-task(void, printRegion, const char* name, r_region<float, 2> r){
-  std::cout << "for region " << name << std::endl; 
-  for(auto i : r)
-    std::cout << "  point " << i << " has value " << r.read(i) << std::endl; 
-}
-
 task(void, toplevel){
   auto r1 = region(float, 2, make_point(2, 2));
   auto r2 = region(float, 2, make_point(2, 2));
-  call(fillRegion, r1, 3.14159); 
-  call(copyRegion, r1, r2);
-  call(printRegion, "r2", r2); 
-  call(printRegion, "r1", r1); 
+  call((fill<float,2>), r1, 3.14159); 
+  call((copy<float,2>), r1, r2);
+  std::cout << "r1" << std::endl; 
+  call((print<float,2>), r2).get();
+  std::cout << "r2" << std::endl; 
+  call((print<float,2>), r1); 
 }
 
 int main(int argc, char** argv){

@@ -7,8 +7,8 @@
 
 namespace equites { 
 
-template <size_t ndim> 
-using Point = LegionRuntime::Arrays::Point<ndim>;  
+template <size_t ndim>  using Point = LegionRuntime::Arrays::Point<ndim>;  
+template <size_t ndim>  using Rect = LegionRuntime::Arrays::Rect<ndim>;  
 using LegionRuntime::Arrays::make_point;
 
 // Global id that is indexed for tasks
@@ -21,7 +21,7 @@ const static size_t OnlyField = 0;
 /*
 template <size_t ndim>
 LegionRuntime::Arrays::Point<ndim> Point(array<long long,ndim> a)
-  { return LegionRuntime::Arrays::Point<ndim>((long long[ndim]) a.data); }
+  { return Point<ndim>((long long[ndim]) a.data); }
 */
 
 // We define three helper macros. `task` defines a task, while `call` calls a
@@ -41,19 +41,25 @@ LegionRuntime::Arrays::Point<ndim> Point(array<long long,ndim> a)
 /* A simple wrapper to avoid user-facing casting. */
 template <typename a> 
 struct Future {
+  Legion::Future fut;
   Future(Legion::Future f) { fut = f; };
   a get(){return fut.get_result<a>();};
-  private: 
-    Legion::Future fut;
+};
+
+
+template <>
+struct Future<void> {
+  Legion::Future fut;
+  Future(Legion::Future f) { fut = f; };
+  void get(){return fut.get_void_result();};
 };
 
 template <typename a> 
 struct FutureMap {
+  Legion::FutureMap fut;
   FutureMap(Legion::FutureMap f) { fut = f; };
   inline Future<a> operator[](const Legion::DomainPoint &point)
     { return Future<a>(fut.get_future(point)); }
-  private: 
-    Legion::FutureMap fut;
   void wait() {fut.wait_all_results(); } // could return a container of `a`s, e.g. vector<a>
 };
 
@@ -65,8 +71,8 @@ struct context {
 };
 
 template <size_t ndim>
-static LegionRuntime::Arrays::Point<ndim> END(void) {
-  LegionRuntime::Arrays::Point<ndim> z; for(size_t i=0; i < ndim; i++) z.x[i] = -1; return z; 
+static Point<ndim> END(void) {
+  Point<ndim> z; for(size_t i=0; i < ndim; i++) z.x[i] = -1; return z; 
 }
 
 /* regions. */
@@ -74,12 +80,12 @@ static LegionRuntime::Arrays::Point<ndim> END(void) {
 template <typename a, size_t ndim>
 struct _region{
   _region(){}; 
-  _region(const LegionRuntime::Arrays::Rect<ndim> r) : rect(r) {}; 
-  class iterator: public std::iterator <std::input_iterator_tag, a, LegionRuntime::Arrays::Point<ndim>> {
+  _region(const Rect<ndim> r) : rect(r) {}; 
+  class iterator: public std::iterator <std::input_iterator_tag, a, Point<ndim>> {
     public: 
-    LegionRuntime::Arrays::Point<ndim> pt; 
-    LegionRuntime::Arrays::Rect<ndim> r; 
-    explicit iterator(const LegionRuntime::Arrays::Rect<ndim> rect, LegionRuntime::Arrays::Point<ndim> p) : pt(p), r(rect) {} ; 
+    Point<ndim> pt; 
+    Rect<ndim> r; 
+    explicit iterator(const Rect<ndim> rect, Point<ndim> p) : pt(p), r(rect) {} ; 
     void step() {
       for(size_t i=0; i<ndim; i++){
         if(++pt.x[i] <= r.hi.x[i]) return; 
@@ -94,7 +100,7 @@ struct _region{
     iterator operator++(int) {iterator retval = *this; ++(*this); return retval; }
     bool operator==(iterator other) const { return pt == other.pt; }
     bool operator!=(iterator other) const { return !(*this == other); }
-    LegionRuntime::Arrays::Point<ndim> operator*() const { return pt; }
+    Point<ndim> operator*() const { return pt; }
   }; 
 
   Legion::RegionRequirement rr(){
@@ -113,7 +119,7 @@ struct _region{
   Legion::LogicalRegion l; 
   Legion::IndexSpace is; 
   Legion::LogicalRegion parent; 
-  const LegionRuntime::Arrays::Rect<ndim> rect; 
+  const Rect<ndim> rect; 
   const static legion_privilege_mode_t pm = NO_ACCESS;  
   const static legion_coherence_property_t cp = EXCLUSIVE; 
   iterator begin() { return iterator(rect, rect.lo); }
@@ -129,7 +135,7 @@ struct r_region : virtual _region<a, ndim> {
     req.add_field(OnlyField); 
     return req; 
   };
-  a read(LegionRuntime::Arrays::Point<ndim> i){
+  a read(Point<ndim> i){
     return this->acc.read(Legion::DomainPoint::from_point<ndim>(i));
   };
   void setPhysical(Legion::PhysicalRegion &p){
@@ -150,7 +156,7 @@ struct w_region : virtual _region<a, ndim> {
     req.add_field(OnlyField); 
     return req; 
   };
-  void write(LegionRuntime::Arrays::Point<ndim> i, a x){
+  void write(Point<ndim> i, a x){
     this->acc.write(Legion::DomainPoint::from_point<ndim>(i), x); 
   }
   void setPhysical(Legion::PhysicalRegion &p){
@@ -170,7 +176,15 @@ struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
     req.add_field(OnlyField); 
     return req; 
   };
-  rw_region(context c, LegionRuntime::Arrays::Point<ndim> p) : _region<a,ndim>(LegionRuntime::Arrays::Rect<ndim>(LegionRuntime::Arrays::Point<ndim>::ZEROES(), p-LegionRuntime::Arrays::Point<ndim>::ONES())) {
+  a read(Point<ndim> i){
+    return this->acc.read(Legion::DomainPoint::from_point<ndim>(i));
+  };
+  void write(Point<ndim> i, a x){
+    this->acc.write(Legion::DomainPoint::from_point<ndim>(i), x); 
+  }
+  rw_region(context c, Point<ndim> p) : 
+  _region<a,ndim>(Rect<ndim>(Point<ndim>::ZEROES(), 
+                             p-Point<ndim>::ONES())) {
     //cout << "set rect to be from " << Point<ndim>::ZEROES() << " to " << this->rect.hi << endl; 
     this->is = c.runtime->create_index_space(c.ctx, Legion::Domain::from_rect<ndim>(this->rect));
     Legion::FieldSpace fs = c.runtime->create_field_space(c.ctx);
@@ -302,7 +316,7 @@ class _task {
   Legion::TaskID id;
   _task(const char* name="default", 
         Legion::ProcessorConstraint pc = 
-          Legion::ProcessorConstraint(Legion::Processor::LOC_PROC)){
+        Legion::ProcessorConstraint(Legion::Processor::LOC_PROC)){
     id = globalId++; // still not sure about this 
     Legion::TaskVariantRegistrar registrar(id, name);
     registrar.add_constraint(pc);
@@ -317,7 +331,7 @@ class _task {
   }
   /*
   template <size_t ndim, typename ...Args>
-  FutureMap<RT> _icall(context c, LegionRuntime::Arrays::Point<ndim> pt, Args... a){
+  FutureMap<RT> _icall(context c, Point<ndim> pt, Args... a){
     argtuple p = make_tuple(a...);
     Legion::ArgumentMap arg_map; 
     Legion::IndexSpace is, pis; 
@@ -338,11 +352,11 @@ enum PartitionType {
 }; 
 template <typename a, size_t ndim, typename t>
 class Partition{
-  class iterator: public std::iterator <std::input_iterator_tag, t, LegionRuntime::Arrays::Point<ndim>> {
+  class iterator: public std::iterator <std::input_iterator_tag, t, Point<ndim>> {
     public: 
-    LegionRuntime::Arrays::Point<ndim> pt; 
-    LegionRuntime::Arrays::Rect<ndim> r; 
-    explicit iterator(const LegionRuntime::Arrays::Rect<ndim> rect, LegionRuntime::Arrays::Point<ndim> p) : pt(p), r(rect) {} ; 
+    Point<ndim> pt; 
+    Rect<ndim> r; 
+    explicit iterator(const Rect<ndim> rect, Point<ndim> p) : pt(p), r(rect) {} ; 
     void step() {
       for(size_t i=0; i<ndim; i++){
         if(++pt.x[i] <= r.hi.x[i]) return; 
@@ -357,13 +371,13 @@ class Partition{
     iterator operator++(int) {iterator retval = *this; ++(*this); return retval; }
     bool operator==(iterator other) const { return pt == other.pt; }
     bool operator!=(iterator other) const { return !(*this == other); }
-    LegionRuntime::Arrays::Point<ndim> operator*() const { return pt; }
+    Point<ndim> operator*() const { return pt; }
   }; 
   public:
-    Partition(context c, PartitionType pt, t parent, LegionRuntime::Arrays::Point<ndim> p)
+    Partition(context c, PartitionType pt, t parent, Point<ndim> p)
       : pt(pt), parent(parent) {
-      LegionRuntime::Arrays::Rect<ndim> r(LegionRuntime::Arrays::Point<ndim>::ZEROES(), 
-                                          p-LegionRuntime::Arrays::Point<ndim>::ONES()); 
+      Rect<ndim> r(Point<ndim>::ZEROES(), 
+                                          p-Point<ndim>::ONES()); 
       is = c.runtime->create_index_space(c.ctx, r); 
       lp = c.runtime->get_logical_partition(r, is); 
     }
@@ -386,7 +400,6 @@ int start(_task<void (*) (context, int, char**), f> t, int argc, char** argv){
   return Legion::Runtime::start(argc, argv);
 };
 
-
 template <typename a, size_t ndim> 
 void _fill(context _c, w_region<a, ndim> r, a v); 
 template <typename a, size_t ndim> 
@@ -396,4 +409,25 @@ void _fill(context _c, w_region<a, ndim> r, a v){
   for(auto i : r) r.write(i, v);
 }
 
+template <typename a, size_t ndim> 
+void _print(context _c, r_region<a, ndim> r); 
+template <typename a, size_t ndim> 
+_task<decltype(&_print<a,ndim>), _print<a,ndim>> print("print"); 
+template <typename a, size_t ndim>
+void _print(context _c, r_region<a, ndim> r){
+  for(auto i : r){
+    std::cout << i << ": " << r.read(i) << std::endl; 
+  }
+}
+
+template <typename a, size_t ndim> 
+void _copy(context _c, r_region<a, ndim> r, w_region<a, ndim> w); 
+template <typename a, size_t ndim>
+_task<decltype(&_copy<a,ndim>), _copy<a,ndim>> copy("copy"); 
+template <typename a, size_t ndim>
+void _copy(context _c, r_region<a, ndim> r, w_region<a, ndim> w){
+  for(auto i : r){
+    w.write(i, r.read(i)); 
+  }
+}
 } /* namespace Equites */
