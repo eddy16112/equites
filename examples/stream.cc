@@ -25,7 +25,7 @@ task(void, toplevel, int argc, char** argv){
     call(fillRegion, b, 1.71828);
     call(triad, iters, 1.61803, a, b, c);
   }
-  cout << "Running " << size * ntask * iters * 3 * sizeof(float) << " memory operations" << endl; 
+  std::cout << "Running " << size * ntask * iters * 3 * sizeof(float) << " memory operations" << std::endl; 
 }
 
 int main(int argc, char** argv){

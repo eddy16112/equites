@@ -10,14 +10,14 @@ task(void, fillRegion, w_region<float, 2> r, float x){
 }
 
 task(void, printRegion, const char* name, r_region<float, 2> r){
-  cout << "for region " << name << endl; 
+  std::cout << "for region " << name << std::endl; 
   for(auto i : r)
-    cout << "  point " << i << " has value " << r.read(i) << endl; 
+    std::cout << "  point " << i << " has value " << r.read(i) << std::endl; 
 }
 
 task(void, toplevel){
-  auto r1 = region(float, 2, point(2, 2));
-  auto r2 = region(float, 2, point(2, 2));
+  auto r1 = region(float, 2, make_point(2, 2));
+  auto r2 = region(float, 2, make_point(2, 2));
   call(fillRegion, r1, 3.14159); 
   call(copyRegion, r1, r2);
   call(printRegion, "r2", r2); 

@@ -8,7 +8,7 @@ task(void, print, r_region<float, 1> r){
 }
 
 task(void, init, w_region<float, 1> r){
-  for(LegionRuntime::Arrays::Point<1> i : r){
+  for(auto i : r){
     r.write(i, 3.14159);  
   }
 }
