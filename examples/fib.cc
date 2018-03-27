@@ -3,7 +3,7 @@ using namespace equites;
 
 task(int, fib, int i){
   if(i < 2) return 1; 
-  auto x = call(fib, i-1);
+  Future<int> x = call(fib, i-1);
   auto y = call(fib, i-2);
   return y.get() + x.get();
 }

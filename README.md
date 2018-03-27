@@ -28,4 +28,7 @@ See `examples/` for example usage. Running `make` will build all examples.
 - Inline mapping
 - Reductions
 - Unstructured regions
-
+- Rewrite Apps (Stencil)
+- Contiguous iterator optimizations (look at lambdas)
+- Templated interfaces (e.g. IndexSpaceT)
+- 

@@ -37,6 +37,7 @@ LegionRuntime::Arrays::Point<ndim> Point(array<long long,ndim> a)
 #define icall(f, args...) f._icall(_c, ## args)
 // Region hides the context call as well
 #define region(a, ndim, size) rw_region<a,ndim>(_c, size)
+#define partition(a, ndim, ty, r, pt) Partition<a,ndim,decltype(r)>(_c, ty, r, pt)
 
 /* A simple wrapper to avoid user-facing casting. */
 template <typename a> 
@@ -161,11 +162,11 @@ struct w_region : virtual _region<a, ndim> {
   }
   void setPhysical(Legion::PhysicalRegion &p){
     this->p = p;
-    this->acc = Legion::FieldAccessor<WRITE_ONLY, a, ndim>(p, OnlyField);
+    this->acc = Legion::FieldAccessor<READ_WRITE, a, ndim>(p, OnlyField);
   }
 
-  Legion::FieldAccessor<WRITE_ONLY, a, ndim> acc; 
-  const static legion_privilege_mode_t pm = WRITE_ONLY;  
+  Legion::FieldAccessor<READ_WRITE, a, ndim> acc; 
+  const static legion_privilege_mode_t pm = READ_WRITE;  
 };
 
 // read-write region
@@ -350,6 +351,8 @@ class _task {
 enum PartitionType {
   equal
 }; 
+
+/*
 template <typename a, size_t ndim, typename t>
 class Partition{
   class iterator: public std::iterator <std::input_iterator_tag, t, Point<ndim>> {
@@ -374,19 +377,35 @@ class Partition{
     Point<ndim> operator*() const { return pt; }
   }; 
   public:
+    context c; 
+    Rect<ndim> rect;
     Partition(context c, PartitionType pt, t parent, Point<ndim> p)
       : pt(pt), parent(parent) {
-      Rect<ndim> r(Point<ndim>::ZEROES(), 
-                                          p-Point<ndim>::ONES()); 
-      is = c.runtime->create_index_space(c.ctx, r); 
-      lp = c.runtime->get_logical_partition(r, is); 
+      this->rect = Rect<ndim>(Point<ndim>::ZEROES(), 
+                   p-Point<ndim>::ONES()); 
+      is = c.runtime->create_index_space(c.ctx, Legion::Domain::from_rect<ndim>(this->rect)); 
+      switch (pt) {
+        case equal:
+          ip = c.runtime->create_equal_partition(c.ctx, parent.is, is, 0, (Color)0); 
+      }
+      lp = c.runtime->get_logical_partition(c.ctx, parent, ip); 
+      this->c = c;
     }
     Legion::IndexSpace is; 
     Legion::LogicalPartition lp;
     Legion::IndexPartition ip;  
     PartitionType pt; 
     t parent; 
+    t subregion(Point<ndim> p){
+      t sr();
+      sr->l = c.runtime->get_logical_subregion_by_color(c.ctx, this->parent,
+        Legion::DomainPoint::from_point<ndim>(p)); 
+      return sr; 
+    }
+    iterator begin() { return iterator(rect, rect.lo); }
+    iterator end() { return iterator(rect, END<ndim>()); }
 }; 
+*/
 
 template <void (*f) (context)>
 int start(_task<void (*) (context), f> t, int argc, char** argv){ 
