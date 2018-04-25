@@ -1,10 +1,10 @@
-legion_install_dir=/usr/local/
+legion_install_dir=/home/wwu12/legion-install
 ldflags=-L${legion_install_dir}/lib64/ -llegion -lrealm -lpthread -ldl -rdynamic \
 			  -lrt 
 cflags=-std=c++14 -Wall -I${legion_install_dir}/include -I.. -g
 CC=g++
 
-examples=fib hello region 2d stream inc doublewrite
+examples=hello fib saxpy
 
 all: ${examples}
 
