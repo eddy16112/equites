@@ -301,19 +301,30 @@ struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
       printf("rw set RR fid %d\n", *it);
       req.add_field(*it); 
     }
-    task_field_vector.clear();
     return req; 
   };
   
-  a read(Legion::Point<ndim> i, int fid)
+  a read(int fid, Legion::Point<ndim> i)
   {
     Legion::FieldAccessor<READ_WRITE, a, ndim> *acc = get_accessor_by_fid(fid);
     return (*acc)[i];
   };
   
-  void write(Legion::Point<ndim> i, int fid, a x)
+  a read(Legion::Point<ndim> i)
+  {
+    Legion::FieldAccessor<READ_WRITE, a, ndim> *acc = get_default_accessor();
+    return (*acc)[i];
+  };
+  
+  void write(int fid, Legion::Point<ndim> i, a x)
   {
     Legion::FieldAccessor<READ_WRITE, a, ndim> *acc = get_accessor_by_fid(fid);
+    (*acc)[i] = x; 
+  }
+  
+  void write(Legion::Point<ndim> i, a x)
+  {
+    Legion::FieldAccessor<READ_WRITE, a, ndim> *acc = get_default_accessor();
     (*acc)[i] = x; 
   }
   
@@ -354,6 +365,11 @@ struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
     task_field_vector.push_back(fid);
   }
   
+  void clear_task_field()
+  {
+    task_field_vector.clear();
+  }
+  
   Legion::FieldAccessor<READ_WRITE, a, ndim>* get_accessor_by_fid(Legion::FieldID fid)
   {
     typename std::map<Legion::FieldID, Legion::FieldAccessor<READ_WRITE, a, ndim>>::iterator it = accessor_map.find(fid);
@@ -361,8 +377,15 @@ struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
       return &(it->second);
     } else {
       printf("can not find accessor of fid %d\n", fid);
+      assert(0);
       return NULL;
     }
+  }
+  
+  Legion::FieldAccessor<READ_WRITE, a, ndim>* get_default_accessor()
+  {
+    assert(task_field_vector.size() == 1);
+    return get_accessor_by_fid(task_field_vector[0]);
   }
 
   std::vector<Legion::FieldID> task_field_vector;
@@ -438,26 +461,26 @@ mkLegionTask(const Legion::Task *task, const std::vector<Legion::PhysicalRegion>
 
 // Process region requirements for function calls
 template <typename t> 
-inline void registerRR(Legion::TaskLauncher &l, t r){ }; 
+inline void registerRR(Legion::TaskLauncher &l, t &r){ }; 
 
 template <typename a, size_t ndim, template <typename, size_t> typename t>
 inline typename std::enable_if<!std::is_base_of<_region<a,ndim>, t<a,ndim>>::value, void>::type
-registerRR(Legion::TaskLauncher &l, t<a, ndim> r){ }; 
+registerRR(Legion::TaskLauncher &l, t<a, ndim> &r){ }; 
 
 template <typename a, size_t ndim, template <typename, size_t> typename t>
 inline typename std::enable_if<std::is_base_of<_region<a,ndim>, t<a,ndim>>::value, void>::type
-registerRR(Legion::TaskLauncher &l, t<a, ndim> r){
+registerRR(Legion::TaskLauncher &l, t<a, ndim> &r){
   l.add_region_requirement(r.rr());    
   //printf("registered region\n"); 
 };
 
 template<size_t I = 0, typename... Tp>
 inline typename std::enable_if<I == sizeof...(Tp), void>::type
-regionArgReqs(Legion::TaskLauncher &l, std::tuple<Tp...> t) {}
+regionArgReqs(Legion::TaskLauncher &l, std::tuple<Tp...> &t) {}
 
 template<size_t I = 0, typename... Tp>
 inline typename std::enable_if<I < sizeof...(Tp), void>::type 
-regionArgReqs(Legion::TaskLauncher &l, std::tuple<Tp...> t)  {
+regionArgReqs(Legion::TaskLauncher &l, std::tuple<Tp...> &t)  {
   registerRR(l, std::get<I>(t));
   regionArgReqs<I+1>(l, t);  
 }
@@ -502,7 +525,7 @@ public:
     regTask<RT, F, f>::variant(registrar); 
   }
   template <typename F, typename ...Args>
-  Future launch_single_task(F f, context c, Args... a)
+  Future launch_single_task(F f, context &c, Args... a)
   {
     typedef typename function_traits<F>::args argtuple;
     argtuple p = std::make_tuple(a...);
