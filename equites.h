@@ -37,6 +37,45 @@ inline Legion::Point<3> makepoint(coord_t x, coord_t y, coord_t z)
   return Legion::Point<3>(val);
 }
 
+/* Simple wrapper for all needed context passed to tasks */
+struct context {
+  const Legion::Task *task;
+  Legion::Context ctx;
+  Legion::Runtime *runtime;
+};
+
+
+template <size_t DIM>
+class IdxSpace {
+public:
+  Legion::IndexSpace idx_space;
+  Rect<DIM> rect;
+public:
+  IdxSpace(const context& c, Point<DIM> p)
+  {
+    rect = Rect<DIM>(Point<DIM>::ZEROES(), p-Point<DIM>::ONES());
+    std::cout << "ispace set rect to be from " << Point<DIM>::ZEROES() << " to " << rect.hi << std::endl; 
+    idx_space = c.runtime->create_index_space(c.ctx, Legion::Domain::from_rect<DIM>(rect)); 
+  }
+};
+
+class FdSpace {
+public:
+  Legion::FieldSpace fd_space;
+  Legion::FieldAllocator allocator;
+public:
+  FdSpace(const context& c)
+  {
+    fd_space = c.runtime->create_field_space(c.ctx);
+    allocator = c.runtime->create_field_allocator(c.ctx, fd_space);
+  }
+  template <typename T>
+  void add_field(int fid)
+  {
+    allocator.allocate_field(sizeof(T),fid);
+  }
+};
+
 // Global id that is indexed for tasks
 static Legion::TaskID globalId = 0;
 
@@ -112,13 +151,6 @@ struct FutureMap {
   void wait() {fut.wait_all_results(); } // could return a container of `a`s, e.g. vector<a>
 };*/
 
-/* Simple wrapper for all needed context passed to tasks */
-struct context {
-  const Legion::Task *task;
-  Legion::Context ctx;
-  Legion::Runtime *runtime;
-};
-
 template <size_t ndim>
 static Point<ndim> END(void) {
   Point<ndim> z; for(size_t i=0; i < ndim; i++) z.x[i] = -1; return z; 
@@ -158,7 +190,7 @@ struct _region{
     return req; 
   };
 
-  void setPhysical(Legion::PhysicalRegion &p){
+  void setPhysical(context &c, Legion::PhysicalRegion &p){
     this->p = p;
     this->acc = Legion::FieldAccessor<NO_ACCESS, a, ndim>(p, OnlyField);
   }
@@ -168,7 +200,7 @@ struct _region{
   Legion::LogicalRegion l; 
   Legion::IndexSpace is; 
   Legion::LogicalRegion parent; 
-  const Rect<ndim> rect; 
+  Rect<ndim> rect; 
   const static legion_privilege_mode_t pm = NO_ACCESS;  
   const static legion_coherence_property_t cp = EXCLUSIVE; 
   iterator begin() { return iterator(rect, rect.lo); }
@@ -187,7 +219,7 @@ struct r_region : virtual _region<a, ndim> {
   a read(Point<ndim> i){
     return this->acc.read(Legion::DomainPoint::from_point<ndim>(i));
   };
-  void setPhysical(Legion::PhysicalRegion &p){
+  void setPhysical(context &c, Legion::PhysicalRegion &p){
     this->p = p;
     this->acc = Legion::FieldAccessor<READ_ONLY, a, ndim>(p, OnlyField);
   }
@@ -208,7 +240,7 @@ struct w_region : virtual _region<a, ndim> {
   void write(Point<ndim> i, a x){
     this->acc.write(Legion::DomainPoint::from_point<ndim>(i), x); 
   }
-  void setPhysical(Legion::PhysicalRegion &p){
+  void setPhysical(context &c, Legion::PhysicalRegion &p){
     this->p = p;
     this->acc = Legion::FieldAccessor<READ_WRITE, a, ndim>(p, OnlyField);
   }
@@ -220,20 +252,30 @@ struct w_region : virtual _region<a, ndim> {
 // read-write region
 template <typename a, size_t ndim>
 struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
-  Legion::RegionRequirement rr(){
+  Legion::RegionRequirement rr()
+  {
     Legion::RegionRequirement req(this->l, this->pm, this->cp, this->parent); 
-    req.add_field(OnlyField); 
+    for (int i = 0; i < nb_fields; i++) {
+      printf("rw set RR fid %d\n", task_fields[i]);
+      req.add_field(task_fields[i]); 
+    }
     return req; 
   };
-  a read(Point<ndim> i){
-    return this->acc.read(Legion::DomainPoint::from_point<ndim>(i));
+  
+  a read(Point<ndim> i, int fid)
+  {
+    return acc_array[fid].read(Legion::DomainPoint::from_point<ndim>(i));
   };
-  void write(Point<ndim> i, a x){
-    this->acc.write(Legion::DomainPoint::from_point<ndim>(i), x); 
+  
+  void write(Point<ndim> i, int fid, a x)
+  {
+    acc_array[fid].write(Legion::DomainPoint::from_point<ndim>(i), x); 
   }
+  
   rw_region(context c, Point<ndim> p) : 
   _region<a,ndim>(Rect<ndim>(Point<ndim>::ZEROES(), 
-                             p-Point<ndim>::ONES())) {
+                             p-Point<ndim>::ONES())) 
+  {
     std::cout << "set rect to be from " << Point<ndim>::ZEROES() << " to " << this->rect.hi << std::endl; 
     this->is = c.runtime->create_index_space(c.ctx, Legion::Domain::from_rect<ndim>(this->rect));
     Legion::FieldSpace fs = c.runtime->create_field_space(c.ctx);
@@ -241,13 +283,46 @@ struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
     all.allocate_field(sizeof(a), OnlyField);
     this->l = c.runtime->create_logical_region(c.ctx, this->is, fs);
     this->parent = this->l; 
+    nb_fields = 0;
   }; 
-  void setPhysical(Legion::PhysicalRegion &p){
-    this->p = p;
-    this->acc = Legion::FieldAccessor<READ_WRITE, a, ndim>(p, OnlyField);
+  
+  rw_region(context& c, IdxSpace<ndim> ispace, FdSpace fspace)
+  {
+    this->rect = ispace.rect;
+    this->is = ispace.idx_space;
+    this->l = c.runtime->create_logical_region(c.ctx, this->is, fspace.fd_space);
+    this->parent = this->l;
+    nb_fields = 0;
+  }
+  
+  void setPhysical(context &c, Legion::PhysicalRegion &pr, Legion::RegionRequirement &rr)
+  {
+    this->p = pr;
+    std::set<Legion::FieldID>::iterator it;
+    for (it = rr.privilege_fields.begin(); it != rr.privilege_fields.end(); it++) {
+      int field = *(it);
+      printf("rr field %d, set acc \n", field);
+      acc_array[field] = Legion::FieldAccessor<READ_WRITE, a, ndim>(pr, field);
+    }
+    /*
+    for (int i = 0; i < nb_fields; i++)
+    {
+      printf("set PR fid %d\n", task_fields[i]);
+      acc_array[task_fields[i]] = Legion::FieldAccessor<READ_WRITE, a, ndim>(pr, task_fields[i]);
+    }*/
+    
+    //this->rect = cruntime->get_index_space_domain(c.ctx, rr.region.get_index_space());
+  }
+  
+  void set_task_field(int fid)
+  {
+    this->task_fields[nb_fields] = fid;
+    nb_fields ++;
   }
 
-  Legion::FieldAccessor<READ_WRITE, a, ndim> acc; 
+  int task_fields[10];
+  int nb_fields;
+  Legion::FieldAccessor<READ_WRITE, a, ndim> acc_array[10]; 
   const static legion_privilege_mode_t pm = READ_WRITE;
 };
 
@@ -280,40 +355,40 @@ struct function_traits<R (*) (Args...)> {
 
 // Specialization on regions
 template <typename t> 
-inline int bindPhysical(std::vector<Legion::PhysicalRegion> v, size_t i, t x) { return i; }; 
+inline int bindPhysical(context &c, std::vector<Legion::PhysicalRegion> pr, std::vector<Legion::RegionRequirement> rr, size_t i, t x) { return i; }; 
 
 template <typename a, size_t ndim, template <typename, size_t> typename t>
 inline typename std::enable_if<!std::is_base_of<_region<a,ndim>, t<a,ndim>>::value, int>::type
-  bindPhysical(std::vector<Legion::PhysicalRegion> v, size_t i, t<a,ndim> *r){ return i; }; 
+  bindPhysical(context &c, std::vector<Legion::PhysicalRegion> pr, std::vector<Legion::RegionRequirement> rr, size_t i, t<a,ndim> *r){ return i; }; 
 
 template <typename a, size_t ndim, template <typename, size_t> typename t>
 inline typename std::enable_if<std::is_base_of<_region<a,ndim>, t<a,ndim>>::value, int>::type
-bindPhysical(std::vector<Legion::PhysicalRegion> v, size_t i, t<a,ndim> *r){
-  r->setPhysical(std::ref(v[i]));    
+bindPhysical(context &c, std::vector<Legion::PhysicalRegion> pr, std::vector<Legion::RegionRequirement> rr, size_t i, t<a,ndim> *r){
+  r->setPhysical(c, std::ref(pr[i]), std::ref(rr[i]));    
   return i+1; 
 };
 
 // Template size_t
 template<size_t I = 0, typename... Tp>
 inline typename std::enable_if<I == sizeof...(Tp), void>::type
-bindPs(std::vector<Legion::PhysicalRegion> v, size_t i, std::tuple<Tp...> *) { }
+bindPs(context &c, std::vector<Legion::PhysicalRegion> pr, std::vector<Legion::RegionRequirement> rr, size_t i, std::tuple<Tp...> *) { }
 
 template<size_t I = 0, typename... Tp>
 inline typename std::enable_if<I < sizeof...(Tp), void>::type 
-bindPs(std::vector<Legion::PhysicalRegion> v, size_t i, std::tuple<Tp...> *t){
-  bindPs<I+1>(v, bindPhysical(v, i, &std::get<I>(*t)), t); 
+bindPs(context &c, std::vector<Legion::PhysicalRegion> pr, std::vector<Legion::RegionRequirement> rr, size_t i, std::tuple<Tp...> *t){
+  bindPs<I+1>(c, pr, rr, bindPhysical(c, pr, rr, i, &std::get<I>(*t)), t); 
 };
 
 // Builds a legion task out of an arbitrary function that takes a context as a
 // first argument
 template <typename F, F f>
 inline typename function_traits<F>::returnType  
-mkLegionTask(const Legion::Task *task, const std::vector<Legion::PhysicalRegion>& rs, Legion::Context ctx, Legion::Runtime* rt) {
+mkLegionTask(const Legion::Task *task, const std::vector<Legion::PhysicalRegion>& pr, Legion::Context ctx, Legion::Runtime* rt) {
   typedef typename function_traits<F>::args argtuple;
   argtuple at = *(argtuple*) task->args;
   context c = { task, ctx, rt };
   size_t i = 0; 
-  bindPs(rs, i, &at); 
+  bindPs(c, pr, task->regions, i, &at); 
   return apply(f, std::tuple_cat(std::make_tuple(c), at));
 }
 
@@ -448,36 +523,6 @@ public:
   */
 };
 
-template <size_t DIM>
-class IdxSpace {
-public:
-  Legion::IndexSpace idx_space;
-  Legion::Rect<DIM> rect;
-public:
-  IdxSpace(const context& c, const Legion::Point<DIM> p)
-  {
-    rect = Legion::Rect<DIM>(Legion::Point<DIM>::ZEROES(), p-Legion::Point<DIM>::ONES());
-    std::cout << "ispace set rect to be from " << Legion::Point<DIM>::ZEROES() << " to " << rect.hi << std::endl; 
-    idx_space = c.runtime->create_index_space(c.ctx, rect); 
-  }
-};
-
-class FdSpace {
-public:
-  Legion::FieldSpace fd_space;
-  FieldAllocator allocator;
-public:
-  FdSpace(const context& c)
-  {
-    fd_space = c.runtime->create_field_space(c.ctx);
-    allocator = c.runtime->create_field_allocator(ctx, fd_space);
-  }
-  template <typename T>
-  void add_field(int fid)
-  {
-    allocator.allocate_field(sizeof(T),fid);
-  }
-};
 
 class TaskRuntime
 {
