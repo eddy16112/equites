@@ -7,16 +7,24 @@ enum FieldIDs {
   FID_Z,
 };
 
-void saxpy(context _c, float alpha, rw_region<float, 1> ab, rw_region<float, 1> c){
+void saxpy(context _c, float alpha, rw_region<float, 1> region_xy, rw_region<float, 1> region_z){
+  /*
   for(auto i : ab) {
     float z = c.read(i, FID_Z);
     float x = ab.read(i, FID_X);
     float y = ab.read(i, FID_Y);
     c.write(i, FID_Z, z + x * alpha + y);
+  }*/
+  for (rw_region<float, 1>::iterator pir(region_xy.domain); pir(); pir++) {
+    float z = region_z.read(*pir, FID_Z);
+    float x = region_xy.read(*pir, FID_X);
+    float y = region_xy.read(*pir, FID_Y);
+    region_z.write(*pir, FID_Z, z + x * alpha + y);
   }
 }
 
-void init_value(context _c, rw_region<float, 1> ab, rw_region<float, 1> c){
+void init_value(context _c, rw_region<float, 1> region_xy, rw_region<float, 1> region_z){
+  /*
   for(auto i : ab) {
     float z = 3;
     float x = 1;
@@ -24,14 +32,32 @@ void init_value(context _c, rw_region<float, 1> ab, rw_region<float, 1> c){
     ab.write(i, FID_X, x);
     ab.write(i, FID_Y, y);
     c.write(i, FID_Z, z);
+  }*/
+  
+  for (rw_region<float, 1>::iterator pir(region_xy.domain); pir(); pir++) {
+    float x = 1;
+    float y = 2;
+    float z = 3;
+    region_xy.write(*pir, FID_X, x);
+    region_xy.write(*pir, FID_Y, y);
+    region_z.write(*pir, FID_Z, z);
   }
 }
 
-void check(context _c, rw_region<float, 1> ab, rw_region<float, 1> c){
+void check(context _c, rw_region<float, 1> region_xy, rw_region<float, 1> region_z){
+  /*
   for(auto i : ab) {
     float z = c.read(i, FID_Z);
     float x = ab.read(i, FID_X);
     float y = ab.read(i, FID_Y);
+    printf("x %f, y %f, z %f\n", x, y, z);
+  } */
+  
+ // Legion::PointInDomainIterator<1> pir(ab.domain);
+  for (rw_region<float, 1>::iterator pir(region_xy.domain); pir(); pir++) {
+    float x = region_xy.read(*pir, FID_X);
+    float y = region_xy.read(*pir, FID_Y);
+    float z = region_z.read(*pir, FID_Z);
     printf("x %f, y %f, z %f\n", x, y, z);
   }
 }

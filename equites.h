@@ -156,6 +156,7 @@ static Point<ndim> END(void) {
   Point<ndim> z; for(size_t i=0; i < ndim; i++) z.x[i] = -1; return z; 
 }
 
+#if 0
 /* regions. */
 /* _region is an abstract class */
 template <typename a, size_t ndim>
@@ -195,6 +196,8 @@ struct _region{
     this->acc = Legion::FieldAccessor<NO_ACCESS, a, ndim>(p, OnlyField);
   }
 
+  Legion::Domain domain;
+  Legion::PointInDomainIterator<ndim> domain_iterator;
   Legion::FieldAccessor<NO_ACCESS, a, ndim> acc; 
   Legion::PhysicalRegion p;
   Legion::LogicalRegion l; 
@@ -206,6 +209,44 @@ struct _region{
   iterator begin() { return iterator(rect, rect.lo); }
   iterator end() { return iterator(rect, END<ndim>()); }
 };
+#else
+/* regions. */
+/* _region is an abstract class */
+template <typename a, size_t ndim>
+struct _region{
+  _region(){}; 
+  _region(const Rect<ndim> r) : rect(r) {}; 
+  class iterator: public Legion::PointInDomainIterator<ndim>{
+    public: 
+    explicit iterator(Legion::Domain d) : Legion::PointInDomainIterator<ndim>(d) {} ; 
+    bool operator()(void) {return Legion::PointInDomainIterator<ndim>::operator()();}
+    iterator& operator++(void) {Legion::PointInDomainIterator<ndim>::step(); return *this; }
+    iterator& operator++(int) {Legion::PointInDomainIterator<ndim>::step(); return *this; }
+    const Legion::Point<ndim>& operator*(void) { return Legion::PointInDomainIterator<ndim>::operator*(); }
+  }; 
+
+  Legion::RegionRequirement rr(){
+    Legion::RegionRequirement req(this->l, this->pm, this->cp, this->parent); 
+    req.add_field(OnlyField); 
+    return req; 
+  };
+
+  void setPhysical(context &c, Legion::PhysicalRegion &p){
+    this->p = p;
+    this->acc = Legion::FieldAccessor<NO_ACCESS, a, ndim>(p, OnlyField);
+  }
+
+  Legion::Domain domain;
+  Legion::FieldAccessor<NO_ACCESS, a, ndim> acc; 
+  Legion::PhysicalRegion p;
+  Legion::LogicalRegion l; 
+  Legion::IndexSpace is; 
+  Legion::LogicalRegion parent; 
+  Rect<ndim> rect; 
+  const static legion_privilege_mode_t pm = NO_ACCESS;  
+  const static legion_coherence_property_t cp = EXCLUSIVE; 
+};
+#endif
 
 // read only region
 template <typename a, size_t ndim>
@@ -267,9 +308,19 @@ struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
     return acc_array[fid].read(Legion::DomainPoint::from_point<ndim>(i));
   };
   
+  a read(Legion::Point<ndim> i, int fid)
+  {
+    return (acc_array[fid])[i];
+  };
+  
   void write(Point<ndim> i, int fid, a x)
   {
     acc_array[fid].write(Legion::DomainPoint::from_point<ndim>(i), x); 
+  }
+  
+  void write(Legion::Point<ndim> i, int fid, a x)
+  {
+    (acc_array[fid])[i] = x; 
   }
   
   rw_region(context c, Point<ndim> p) : 
@@ -304,14 +355,8 @@ struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
       printf("rr field %d, set acc \n", field);
       acc_array[field] = Legion::FieldAccessor<READ_WRITE, a, ndim>(pr, field);
     }
-    /*
-    for (int i = 0; i < nb_fields; i++)
-    {
-      printf("set PR fid %d\n", task_fields[i]);
-      acc_array[task_fields[i]] = Legion::FieldAccessor<READ_WRITE, a, ndim>(pr, task_fields[i]);
-    }*/
     
-    //this->rect = cruntime->get_index_space_domain(c.ctx, rr.region.get_index_space());
+    this->domain = c.runtime->get_index_space_domain(c.ctx, rr.region.get_index_space());
   }
   
   void set_task_field(int fid)
