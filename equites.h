@@ -295,47 +295,27 @@ template <typename a, size_t ndim>
 struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
   Legion::RegionRequirement rr()
   {
-    Legion::RegionRequirement req(this->l, this->pm, this->cp, this->parent); 
-    for (int i = 0; i < nb_fields; i++) {
-      printf("rw set RR fid %d\n", task_fields[i]);
-      req.add_field(task_fields[i]); 
+    Legion::RegionRequirement req(this->l, this->pm, this->cp, this->parent);
+    std::vector<Legion::FieldID>::iterator it; 
+    for (it = task_field_vector.begin(); it < task_field_vector.end(); it++) {
+      printf("rw set RR fid %d\n", *it);
+      req.add_field(*it); 
     }
+    task_field_vector.clear();
     return req; 
-  };
-  
-  a read(Point<ndim> i, int fid)
-  {
-    return acc_array[fid].read(Legion::DomainPoint::from_point<ndim>(i));
   };
   
   a read(Legion::Point<ndim> i, int fid)
   {
-    return (acc_array[fid])[i];
+    Legion::FieldAccessor<READ_WRITE, a, ndim> *acc = get_accessor_by_fid(fid);
+    return (*acc)[i];
   };
-  
-  void write(Point<ndim> i, int fid, a x)
-  {
-    acc_array[fid].write(Legion::DomainPoint::from_point<ndim>(i), x); 
-  }
   
   void write(Legion::Point<ndim> i, int fid, a x)
   {
-    (acc_array[fid])[i] = x; 
+    Legion::FieldAccessor<READ_WRITE, a, ndim> *acc = get_accessor_by_fid(fid);
+    (*acc)[i] = x; 
   }
-  
-  rw_region(context c, Point<ndim> p) : 
-  _region<a,ndim>(Rect<ndim>(Point<ndim>::ZEROES(), 
-                             p-Point<ndim>::ONES())) 
-  {
-    std::cout << "set rect to be from " << Point<ndim>::ZEROES() << " to " << this->rect.hi << std::endl; 
-    this->is = c.runtime->create_index_space(c.ctx, Legion::Domain::from_rect<ndim>(this->rect));
-    Legion::FieldSpace fs = c.runtime->create_field_space(c.ctx);
-    Legion::FieldAllocator all = c.runtime->create_field_allocator(c.ctx, fs);
-    all.allocate_field(sizeof(a), OnlyField);
-    this->l = c.runtime->create_logical_region(c.ctx, this->is, fs);
-    this->parent = this->l; 
-    nb_fields = 0;
-  }; 
   
   rw_region(context& c, IdxSpace<ndim> ispace, FdSpace fspace)
   {
@@ -343,31 +323,50 @@ struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
     this->is = ispace.idx_space;
     this->l = c.runtime->create_logical_region(c.ctx, this->is, fspace.fd_space);
     this->parent = this->l;
-    nb_fields = 0;
+    task_field_vector.clear();
+    accessor_map.clear();
+  }
+  ~rw_region()
+  {
+    task_field_vector.clear();
+    accessor_map.clear();
   }
   
   void setPhysical(context &c, Legion::PhysicalRegion &pr, Legion::RegionRequirement &rr)
   {
     this->p = pr;
     std::set<Legion::FieldID>::iterator it;
+    task_field_vector.clear();
+    accessor_map.clear();
     for (it = rr.privilege_fields.begin(); it != rr.privilege_fields.end(); it++) {
-      int field = *(it);
-      printf("rr field %d, set acc \n", field);
-      acc_array[field] = Legion::FieldAccessor<READ_WRITE, a, ndim>(pr, field);
+      int field_id = *(it);
+      task_field_vector.push_back(*it);
+      printf("rr field %d, set acc \n", field_id);
+      Legion::FieldAccessor<READ_WRITE, a, ndim> acc(pr, field_id);
+      accessor_map.insert(std::make_pair(*it, acc)); 
     }
     
     this->domain = c.runtime->get_index_space_domain(c.ctx, rr.region.get_index_space());
   }
   
-  void set_task_field(int fid)
+  void set_task_field(Legion::FieldID fid)
   {
-    this->task_fields[nb_fields] = fid;
-    nb_fields ++;
+    task_field_vector.push_back(fid);
+  }
+  
+  Legion::FieldAccessor<READ_WRITE, a, ndim>* get_accessor_by_fid(Legion::FieldID fid)
+  {
+    typename std::map<Legion::FieldID, Legion::FieldAccessor<READ_WRITE, a, ndim>>::iterator it = accessor_map.find(fid);
+    if (it != accessor_map.end()) {
+      return &(it->second);
+    } else {
+      printf("can not find accessor of fid %d\n", fid);
+      return NULL;
+    }
   }
 
-  int task_fields[10];
-  int nb_fields;
-  Legion::FieldAccessor<READ_WRITE, a, ndim> acc_array[10]; 
+  std::vector<Legion::FieldID> task_field_vector;
+  std::map<Legion::FieldID, Legion::FieldAccessor<READ_WRITE, a, ndim>> accessor_map; 
   const static legion_privilege_mode_t pm = READ_WRITE;
 };
 

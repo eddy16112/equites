@@ -16,10 +16,9 @@ void saxpy(context _c, float alpha, rw_region<float, 1> region_xy, rw_region<flo
     c.write(i, FID_Z, z + x * alpha + y);
   }*/
   for (rw_region<float, 1>::iterator pir(region_xy.domain); pir(); pir++) {
-    float z = region_z.read(*pir, FID_Z);
     float x = region_xy.read(*pir, FID_X);
     float y = region_xy.read(*pir, FID_Y);
-    region_z.write(*pir, FID_Z, z + x * alpha + y);
+    region_z.write(*pir, FID_Z, x * alpha + y);
   }
 }
 
