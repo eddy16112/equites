@@ -7,7 +7,7 @@ enum FieldIDs {
   FID_Z,
 };
 
-void saxpy(context _c, float alpha, rw_region<float, 1> region_xy, rw_region<float, 1> region_z){
+void saxpy(context _c, float alpha, rw_region<1> region_xy, rw_region<1> region_z){
   /*
   for(auto i : ab) {
     float z = c.read(i, FID_Z);
@@ -15,14 +15,14 @@ void saxpy(context _c, float alpha, rw_region<float, 1> region_xy, rw_region<flo
     float y = ab.read(i, FID_Y);
     c.write(i, FID_Z, z + x * alpha + y);
   }*/
-  for (rw_region<float, 1>::iterator pir(region_xy.domain); pir(); pir++) {
-    float x = region_xy.read(FID_X, *pir);
-    float y = region_xy.read(FID_Y, *pir);
-    region_z.write(FID_Z, *pir, x * alpha + y);
+  for (rw_region<1>::iterator pir(region_xy.domain); pir(); pir++) {
+    float x = region_xy.read<float>(FID_X, *pir);
+    float y = region_xy.read<float>(FID_Y, *pir);
+    region_z.write<double>(FID_Z, *pir, x * alpha + y);
   }
 }
 
-void init_value(context _c, rw_region<float, 1> region_xy){
+void init_value(context _c, rw_region<1> region_xy){
   /*
   for(auto i : ab) {
     float z = 3;
@@ -33,14 +33,14 @@ void init_value(context _c, rw_region<float, 1> region_xy){
     c.write(i, FID_Z, z);
   }*/
   
-  for (rw_region<float, 1>::iterator pir(region_xy.domain); pir(); pir++) {
+  for (rw_region<1>::iterator pir(region_xy.domain); pir(); pir++) {
     float value = 2;
-    region_xy.write(*pir, value);
+    region_xy.write<float>(*pir, value);
    // region_xy.write(*pir, FID_Y, y);
   }
 }
 
-void check(context _c, rw_region<float, 1> region_xy, rw_region<float, 1> region_z){
+void check(context _c, rw_region<1> region_xy, rw_region<1> region_z){
   /*
   for(auto i : ab) {
     float z = c.read(i, FID_Z);
@@ -49,10 +49,10 @@ void check(context _c, rw_region<float, 1> region_xy, rw_region<float, 1> region
     printf("x %f, y %f, z %f\n", x, y, z);
   } */
   
-  for (rw_region<float, 1>::iterator pir(region_xy.domain); pir(); pir++) {
-    float x = region_xy.read(FID_X, *pir);
-    float y = region_xy.read(FID_Y, *pir);
-    float z = region_z.read(FID_Z, *pir);
+  for (rw_region<1>::iterator pir(region_xy.domain); pir(); pir++) {
+    float x = region_xy.read<float>(FID_X, *pir);
+    float y = region_xy.read<float>(FID_Y, *pir);
+    double z = region_z.read<double>(FID_Z, *pir);
     printf("x %f, y %f, z %f\n", x, y, z);
   }
 }
@@ -67,20 +67,20 @@ void top_level(context _c)
   Region<1> input_lr(_c, ispace, input_fs);
   
   FdSpace output_fs(_c);
-  output_fs.add_field<float>(FID_Z);
+  output_fs.add_field<double>(FID_Z);
   Region<1> output_lr(_c, ispace, output_fs);
   
   std::vector<field_id_t> x_vec{FID_X};
-  auto rw_x = rw_region<float, 1>(input_lr, x_vec);
+  auto rw_x = rw_region<1>(input_lr, x_vec);
   runtime.execute_task(init_value, _c, rw_x);
   
   std::vector<field_id_t> y_vec{FID_Y};
-  auto rw_y = rw_region<float, 1>(input_lr, y_vec);
+  auto rw_y = rw_region<1>(input_lr, y_vec);
   runtime.execute_task(init_value, _c, rw_y);
   
   float alpha = 2;
-  auto rw_xy = rw_region<float, 1>(input_lr);
-  auto rw_z = rw_region<float, 1>(output_lr);
+  auto rw_xy = rw_region<1>(input_lr);
+  auto rw_z = rw_region<1>(output_lr);
   runtime.execute_task(saxpy, _c, alpha, rw_xy, rw_z);
   
   runtime.execute_task(check, _c, rw_xy, rw_z);
