@@ -13,6 +13,8 @@ template <size_t ndim>  using Point = LegionRuntime::Arrays::Point<ndim>;
 template <size_t ndim>  using Rect = LegionRuntime::Arrays::Rect<ndim>;  
 using LegionRuntime::Arrays::make_point;
 
+typedef Legion::FieldID field_id_t;
+
 
 using coord_t = LegionRuntime::Arrays::coord_t;
 inline Legion::Point<1> makepoint(coord_t x)
@@ -63,16 +65,35 @@ class FdSpace {
 public:
   Legion::FieldSpace fd_space;
   Legion::FieldAllocator allocator;
+  std::vector<field_id_t> field_id_vector;
 public:
   FdSpace(const context& c)
   {
     fd_space = c.runtime->create_field_space(c.ctx);
     allocator = c.runtime->create_field_allocator(c.ctx, fd_space);
+    field_id_vector.clear();
   }
   template <typename T>
-  void add_field(int fid)
+  void add_field(field_id_t fid)
   {
     allocator.allocate_field(sizeof(T),fid);
+    field_id_vector.push_back(fid);
+  }
+};
+
+template <size_t DIM>
+class Region {
+public:
+  Legion::LogicalRegion lr; 
+  Legion::LogicalRegion lr_parent; 
+  std::vector<field_id_t> *field_id_vector;
+public:
+  Region() {}
+  Region(context& c, IdxSpace<DIM> &ispace, FdSpace &fspace)
+  {
+    lr = c.runtime->create_logical_region(c.ctx, ispace.idx_space, fspace.fd_space);
+    lr_parent = lr;  
+    field_id_vector = &(fspace.field_id_vector);
   }
 };
 
@@ -213,9 +234,9 @@ struct _region{
 /* regions. */
 /* _region is an abstract class */
 template <typename a, size_t ndim>
-struct _region{
-  _region(){}; 
-  _region(const Rect<ndim> r) : rect(r) {}; 
+struct base_region{
+  base_region(){}; 
+  base_region(const Rect<ndim> r) : rect(r) {}; 
   class iterator: public Legion::PointInDomainIterator<ndim>{
     public: 
     explicit iterator(Legion::Domain d) : Legion::PointInDomainIterator<ndim>(d) {} ; 
@@ -237,10 +258,13 @@ struct _region{
   }
 
   Legion::Domain domain;
+  Region<ndim> region;
+  Legion::PhysicalRegion pr;
+  
   Legion::FieldAccessor<NO_ACCESS, a, ndim> acc; 
   Legion::PhysicalRegion p;
   Legion::LogicalRegion l; 
-  Legion::IndexSpace is; 
+//  Legion::IndexSpace is; 
   Legion::LogicalRegion parent; 
   Rect<ndim> rect; 
   const static legion_privilege_mode_t pm = NO_ACCESS;  
@@ -249,8 +273,9 @@ struct _region{
 #endif
 
 // read only region
+
 template <typename a, size_t ndim>
-struct r_region : virtual _region<a, ndim> {
+struct r_region : virtual base_region<a, ndim> {
   r_region(){}; 
   Legion::RegionRequirement rr(){
     Legion::RegionRequirement req(this->l, this->pm, this->cp, this->parent); 
@@ -270,8 +295,9 @@ struct r_region : virtual _region<a, ndim> {
 };
 
 // write only region
+
 template <typename a, size_t ndim>
-struct w_region : virtual _region<a, ndim> {
+struct w_region : virtual base_region<a, ndim> {
   w_region(){}; 
   Legion::RegionRequirement rr(){
     Legion::RegionRequirement req(this->l, this->pm, this->cp, this->parent); 
@@ -292,11 +318,11 @@ struct w_region : virtual _region<a, ndim> {
 
 // read-write region
 template <typename a, size_t ndim>
-struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
+struct rw_region : virtual base_region<a, ndim>{
   Legion::RegionRequirement rr()
   {
-    Legion::RegionRequirement req(this->l, this->pm, this->cp, this->parent);
-    std::vector<Legion::FieldID>::iterator it; 
+    Legion::RegionRequirement req(this->region.lr, this->pm, this->cp, this->region.lr_parent);
+    std::vector<field_id_t>::iterator it; 
     for (it = task_field_vector.begin(); it < task_field_vector.end(); it++) {
       printf("rw set RR fid %d\n", *it);
       req.add_field(*it); 
@@ -327,16 +353,32 @@ struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
     Legion::FieldAccessor<READ_WRITE, a, ndim> *acc = get_default_accessor();
     (*acc)[i] = x; 
   }
-  
-  rw_region(context& c, IdxSpace<ndim> ispace, FdSpace fspace)
+
+  rw_region(Region<ndim> &region, std::vector<field_id_t> &task_field_id_vec)
   {
-    this->rect = ispace.rect;
-    this->is = ispace.idx_space;
-    this->l = c.runtime->create_logical_region(c.ctx, this->is, fspace.fd_space);
-    this->parent = this->l;
+    this->region = region;
     task_field_vector.clear();
     accessor_map.clear();
+    std::vector<field_id_t>::iterator it; 
+    for (it = task_field_id_vec.begin(); it < task_field_id_vec.end(); it++) {
+       printf("rw set fid %d\n", *it);
+       task_field_vector.push_back(*it); 
+    }
   }
+  
+  rw_region(Region<ndim> &region)
+  {
+    this->region = region;
+    task_field_vector.clear();
+    accessor_map.clear();
+    std::vector<field_id_t> *task_field_id_vec = region.field_id_vector;
+    std::vector<field_id_t>::iterator it; 
+    for (it = task_field_id_vec->begin(); it < task_field_id_vec->end(); it++) {
+       printf("rw set fid %d\n", *it);
+       task_field_vector.push_back(*it); 
+    }
+  }
+  
   ~rw_region()
   {
     task_field_vector.clear();
@@ -345,8 +387,8 @@ struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
   
   void setPhysical(context &c, Legion::PhysicalRegion &pr, Legion::RegionRequirement &rr)
   {
-    this->p = pr;
-    std::set<Legion::FieldID>::iterator it;
+    this->pr = pr;
+    std::set<field_id_t>::iterator it;
     task_field_vector.clear();
     accessor_map.clear();
     for (it = rr.privilege_fields.begin(); it != rr.privilege_fields.end(); it++) {
@@ -360,7 +402,7 @@ struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
     this->domain = c.runtime->get_index_space_domain(c.ctx, rr.region.get_index_space());
   }
   
-  void set_task_field(Legion::FieldID fid)
+  void set_task_field(field_id_t fid)
   {
     task_field_vector.push_back(fid);
   }
@@ -370,9 +412,9 @@ struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
     task_field_vector.clear();
   }
   
-  Legion::FieldAccessor<READ_WRITE, a, ndim>* get_accessor_by_fid(Legion::FieldID fid)
+  Legion::FieldAccessor<READ_WRITE, a, ndim>* get_accessor_by_fid(field_id_t fid)
   {
-    typename std::map<Legion::FieldID, Legion::FieldAccessor<READ_WRITE, a, ndim>>::iterator it = accessor_map.find(fid);
+    typename std::map<field_id_t, Legion::FieldAccessor<READ_WRITE, a, ndim>>::iterator it = accessor_map.find(fid);
     if (it != accessor_map.end()) {
       return &(it->second);
     } else {
@@ -388,8 +430,8 @@ struct rw_region : virtual r_region<a, ndim>, virtual w_region<a, ndim> {
     return get_accessor_by_fid(task_field_vector[0]);
   }
 
-  std::vector<Legion::FieldID> task_field_vector;
-  std::map<Legion::FieldID, Legion::FieldAccessor<READ_WRITE, a, ndim>> accessor_map; 
+  std::vector<field_id_t> task_field_vector;
+  std::map<field_id_t, Legion::FieldAccessor<READ_WRITE, a, ndim>> accessor_map; 
   const static legion_privilege_mode_t pm = READ_WRITE;
 };
 
@@ -425,11 +467,11 @@ template <typename t>
 inline int bindPhysical(context &c, std::vector<Legion::PhysicalRegion> pr, std::vector<Legion::RegionRequirement> rr, size_t i, t x) { return i; }; 
 
 template <typename a, size_t ndim, template <typename, size_t> typename t>
-inline typename std::enable_if<!std::is_base_of<_region<a,ndim>, t<a,ndim>>::value, int>::type
+inline typename std::enable_if<!std::is_base_of<base_region<a,ndim>, t<a,ndim>>::value, int>::type
   bindPhysical(context &c, std::vector<Legion::PhysicalRegion> pr, std::vector<Legion::RegionRequirement> rr, size_t i, t<a,ndim> *r){ return i; }; 
 
 template <typename a, size_t ndim, template <typename, size_t> typename t>
-inline typename std::enable_if<std::is_base_of<_region<a,ndim>, t<a,ndim>>::value, int>::type
+inline typename std::enable_if<std::is_base_of<base_region<a,ndim>, t<a,ndim>>::value, int>::type
 bindPhysical(context &c, std::vector<Legion::PhysicalRegion> pr, std::vector<Legion::RegionRequirement> rr, size_t i, t<a,ndim> *r){
   r->setPhysical(c, std::ref(pr[i]), std::ref(rr[i]));    
   return i+1; 
@@ -464,11 +506,11 @@ template <typename t>
 inline void registerRR(Legion::TaskLauncher &l, t &r){ }; 
 
 template <typename a, size_t ndim, template <typename, size_t> typename t>
-inline typename std::enable_if<!std::is_base_of<_region<a,ndim>, t<a,ndim>>::value, void>::type
+inline typename std::enable_if<!std::is_base_of<base_region<a,ndim>, t<a,ndim>>::value, void>::type
 registerRR(Legion::TaskLauncher &l, t<a, ndim> &r){ }; 
 
 template <typename a, size_t ndim, template <typename, size_t> typename t>
-inline typename std::enable_if<std::is_base_of<_region<a,ndim>, t<a,ndim>>::value, void>::type
+inline typename std::enable_if<std::is_base_of<base_region<a,ndim>, t<a,ndim>>::value, void>::type
 registerRR(Legion::TaskLauncher &l, t<a, ndim> &r){
   l.add_region_requirement(r.rr());    
   //printf("registered region\n"); 

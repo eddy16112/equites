@@ -58,36 +58,32 @@ void check(context _c, rw_region<float, 1> region_xy, rw_region<float, 1> region
 }
 
 void top_level(context _c)
-{
- // auto r = region(float, 1, 4);
-
- // call((fill<float,1>), r, 3); 
+{ 
+  IdxSpace<1> ispace(_c, 10);
   
-  IdxSpace<1> ispace(_c, 4);
   FdSpace input_fs(_c);
   input_fs.add_field<float>(FID_X);
   input_fs.add_field<float>(FID_Y);
-  auto input_lr = rw_region<float, 1>(_c, ispace, input_fs);
+  Region<1> input_lr(_c, ispace, input_fs);
   
   FdSpace output_fs(_c);
   output_fs.add_field<float>(FID_Z);
-  auto output_lr = rw_region<float, 1>(_c, ispace, output_fs);
-  output_lr.set_task_field(FID_Z);
+  Region<1> output_lr(_c, ispace, output_fs);
   
-  input_lr.set_task_field(FID_X);
-  runtime.execute_task(init_value, _c, input_lr);
+  std::vector<field_id_t> x_vec{FID_X};
+  auto rw_x = rw_region<float, 1>(input_lr, x_vec);
+  runtime.execute_task(init_value, _c, rw_x);
   
-  input_lr.clear_task_field();
-  input_lr.set_task_field(FID_Y);
-  runtime.execute_task(init_value, _c, input_lr);
+  std::vector<field_id_t> y_vec{FID_Y};
+  auto rw_y = rw_region<float, 1>(input_lr, y_vec);
+  runtime.execute_task(init_value, _c, rw_y);
   
   float alpha = 2;
-  input_lr.clear_task_field();
-  input_lr.set_task_field(FID_X);
-  input_lr.set_task_field(FID_Y);
-  runtime.execute_task(saxpy, _c, alpha, input_lr, output_lr);
+  auto rw_xy = rw_region<float, 1>(input_lr);
+  auto rw_z = rw_region<float, 1>(output_lr);
+  runtime.execute_task(saxpy, _c, alpha, rw_xy, rw_z);
   
-  runtime.execute_task(check, _c, input_lr, output_lr);
+  runtime.execute_task(check, _c, rw_xy, rw_z);
   
  // call((print<float,1>), r);
 }
