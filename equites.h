@@ -239,7 +239,7 @@ struct base_region{
   base_region(const Rect<ndim> r) : rect(r) {}; 
   class iterator: public Legion::PointInDomainIterator<ndim>{
     public: 
-    explicit iterator(Legion::Domain d) : Legion::PointInDomainIterator<ndim>(d) {} ; 
+    explicit iterator(base_region &r) : Legion::PointInDomainIterator<ndim>(r.domain) {} ; 
     bool operator()(void) {return Legion::PointInDomainIterator<ndim>::operator()();}
     iterator& operator++(void) {Legion::PointInDomainIterator<ndim>::step(); return *this; }
     iterator& operator++(int) {Legion::PointInDomainIterator<ndim>::step(); return *this; }
