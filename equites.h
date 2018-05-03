@@ -53,6 +53,7 @@ public:
   Legion::IndexSpace idx_space;
   Rect<DIM> rect;
 public:
+  IdxSpace() {}
   IdxSpace(const context& c, Point<DIM> p)
   {
     rect = Rect<DIM>(Point<DIM>::ZEROES(), p-Point<DIM>::ONES());
@@ -67,6 +68,7 @@ public:
   Legion::FieldAllocator allocator;
   std::vector<field_id_t> field_id_vector;
 public:
+  FdSpace() {}
   FdSpace(const context& c)
   {
     fd_space = c.runtime->create_field_space(c.ctx);
@@ -85,15 +87,33 @@ template <size_t DIM>
 class Region {
 public:
   Legion::LogicalRegion lr; 
-  Legion::LogicalRegion lr_parent; 
+  Legion::LogicalRegion lr_parent;
+  IdxSpace<DIM> is; // for partition
   std::vector<field_id_t> *field_id_vector;
 public:
   Region() {}
-  Region(context& c, IdxSpace<DIM> &ispace, FdSpace &fspace)
+  Region(context &c, IdxSpace<DIM> &ispace, FdSpace &fspace)
   {
     lr = c.runtime->create_logical_region(c.ctx, ispace.idx_space, fspace.fd_space);
-    lr_parent = lr;  
+    lr_parent = lr;
+    is = ispace;  
     field_id_vector = &(fspace.field_id_vector);
+  }
+};
+
+template <size_t DIM>
+class Partition {
+public:
+  Legion::IndexPartition ip;
+  Legion::LogicalPartition lp;
+  Region<DIM> region;
+public:
+  Partition() {}
+  Partition(context &c, Region<DIM> &r, IdxSpace<DIM> &is)
+  {
+    ip = c.runtime->create_equal_partition(c.ctx, r.is.idx_space, is.idx_space);
+    lp = c.runtime->get_logical_partition(c.ctx, r.lr, ip);
+    region = r;
   }
 };
 
@@ -144,6 +164,7 @@ struct Future<void> {
 class Future {
 public:
   Legion::Future fut;
+public:  
   Future()
   {
   }
@@ -162,15 +183,27 @@ public:
   }
 };
 
-/*
-template <typename a> 
-struct FutureMap {
+class FutureMap {
+public:  
   Legion::FutureMap fut;
-  FutureMap(Legion::FutureMap f) { fut = f; };
-  inline Future<a> operator[](const Legion::DomainPoint &point)
-    { return Future<a>(fut.get_future(point)); }
-  void wait() {fut.wait_all_results(); } // could return a container of `a`s, e.g. vector<a>
-};*/
+public:
+  FutureMap()
+  {
+    
+  }
+  FutureMap(Legion::FutureMap f) 
+  { 
+    fut = f; 
+  }
+  inline Future operator[](const Legion::DomainPoint &point)
+  { 
+    return Future(fut.get_future(point)); 
+  }
+  void wait() 
+  {
+    fut.wait_all_results(); 
+  } // could return a container of `a`s, e.g. vector<a>
+};
 
 template <size_t ndim>
 static Point<ndim> END(void) {
@@ -259,6 +292,7 @@ struct base_region{
 
   Legion::Domain domain;
   Region<ndim> region;
+  Partition<ndim> partition;
   Legion::PhysicalRegion pr;
   
   //Legion::FieldAccessor<NO_ACCESS, a, ndim> acc; 
@@ -331,6 +365,17 @@ struct rw_region : virtual base_region<ndim>{
     return req; 
   };
   
+  Legion::RegionRequirement rr_index()
+  {
+    Legion::RegionRequirement req(this->partition.lp, 0, this->pm, this->cp, this->region.lr);
+    std::vector<field_id_t>::iterator it; 
+    for (it = task_field_vector.begin(); it < task_field_vector.end(); it++) {
+      printf("index rw set RR fid %d\n", *it);
+      req.add_field(*it); 
+    }
+    return req; 
+  };
+  
   template< typename a>
   a read(int fid, Legion::Point<ndim> i)
   {
@@ -377,6 +422,33 @@ struct rw_region : virtual base_region<ndim>{
     task_field_vector.clear();
     accessor_map.clear();
     std::vector<field_id_t> *task_field_id_vec = region.field_id_vector;
+    std::vector<field_id_t>::iterator it; 
+    for (it = task_field_id_vec->begin(); it != task_field_id_vec->end(); it++) {
+       printf("rw set fid %d\n", *it);
+       task_field_vector.push_back(*it); 
+    }
+  }
+  
+  rw_region(Partition<ndim> &par, std::vector<field_id_t> &task_field_id_vec)
+  {
+    this->partition = par;
+    this->region = par.region;
+    task_field_vector.clear();
+    accessor_map.clear();
+    std::vector<field_id_t>::iterator it; 
+    for (it = task_field_id_vec.begin(); it != task_field_id_vec.end(); it++) {
+       printf("rw set fid %d\n", *it);
+       task_field_vector.push_back(*it); 
+    }
+  }
+  
+  rw_region(Partition<ndim> &par)
+  {
+    this->partition = par;
+    this->region = par.region;
+    task_field_vector.clear();
+    accessor_map.clear();
+    std::vector<field_id_t> *task_field_id_vec = this->region.field_id_vector;
     std::vector<field_id_t>::iterator it; 
     for (it = task_field_id_vec->begin(); it != task_field_id_vec->end(); it++) {
        printf("rw set fid %d\n", *it);
@@ -548,6 +620,32 @@ regionArgReqs(Legion::TaskLauncher &l, std::tuple<Tp...> &t)  {
   regionArgReqs<I+1>(l, t);  
 }
 
+// index
+template <typename t> 
+inline void registerRRIndex(Legion::IndexLauncher &l, t &r){ }; 
+
+template <size_t ndim, template <size_t> typename t>
+inline typename std::enable_if<!std::is_base_of<base_region<ndim>, t<ndim>>::value, void>::type
+registerRRIndex(Legion::IndexLauncher &l, t<ndim> &r){ }; 
+
+template <size_t ndim, template <size_t> typename t>
+inline typename std::enable_if<std::is_base_of<base_region<ndim>, t<ndim>>::value, void>::type
+registerRRIndex(Legion::IndexLauncher &l, t<ndim> &r){
+  l.add_region_requirement(r.rr_index());    
+  //printf("registered region\n"); 
+};
+
+template<size_t I = 0, typename... Tp>
+inline typename std::enable_if<I == sizeof...(Tp), void>::type
+regionArgReqsIndex(Legion::IndexLauncher &l, std::tuple<Tp...> &t) {}
+
+template<size_t I = 0, typename... Tp>
+inline typename std::enable_if<I < sizeof...(Tp), void>::type 
+regionArgReqsIndex(Legion::IndexLauncher &l, std::tuple<Tp...> &t)  {
+  registerRRIndex(l, std::get<I>(t));
+  regionArgReqsIndex<I+1>(l, t);  
+}
+
 template <typename T, typename F, F f> 
 struct regTask {
   static void variant(Legion::TaskVariantRegistrar r){
@@ -592,26 +690,20 @@ public:
   {
     typedef typename function_traits<F>::args argtuple;
     argtuple p = std::make_tuple(a...);
-    Legion::TaskLauncher l(id, Legion::TaskArgument(&p, sizeof(p))); 
-    regionArgReqs(l, p);  
-    return Future(c.runtime->execute_task(c.ctx, l));
+    Legion::TaskLauncher task_launcher(id, Legion::TaskArgument(&p, sizeof(p))); 
+    regionArgReqs(task_launcher, p);  
+    return Future(c.runtime->execute_task(c.ctx, task_launcher));
   }
-  /*
-  template <size_t ndim, typename ...Args>
-  FutureMap<RT> _icall(context c, Point<ndim> pt, Args... a){
-    argtuple p = make_tuple(a...);
+  
+  template <size_t DIM, typename F, typename ...Args>
+  FutureMap launch_index_task(F f, context &c, IdxSpace<DIM> &is, Args... a){
+    typedef typename function_traits<F>::args argtuple;
+    argtuple p = std::make_tuple(a...);
     Legion::ArgumentMap arg_map; 
-    Legion::IndexSpace is, pis; 
-    switch(pt){
-      case equal: 
-        Legion::IndexPartition ip = c.runtime->create_equal_partition(c.ctx, is, pis); 
-        LogicalPartition input_lp = runtime->get_logical_partition(ctx, input_lr, ip);
-        Legion::IndexLauncher l(id, pis, Legion::TaskArgument(NULL, 0), arg_map); 
-        regionArgReqs(l, p);  
-        return FutureMap<RT>(c.runtime->execute_index_space(c.ctx, l));
-    }
+    Legion::IndexLauncher index_launcher(id, is.idx_space, Legion::TaskArgument(&p, sizeof(p)), arg_map); 
+    regionArgReqsIndex(index_launcher, p);  
+    return FutureMap(c.runtime->execute_index_space(c.ctx, index_launcher));
   }
-  */
 };
 
 template <typename F, F f>
@@ -686,7 +778,7 @@ public:
   }
   
   template <typename F, typename ...Args>
-  Future execute_task(F func_ptr, context c, Args... a)
+  Future execute_task(F func_ptr, context &c, Args... a)
   {
     UserTask *t = get_user_task_obj((uintptr_t)func_ptr);
     if (t != NULL) {
@@ -694,6 +786,19 @@ public:
       return fut;
     } else {
       Future fut;
+      return fut;
+    }
+  }
+  
+  template <size_t DIM, typename F, typename ...Args>
+  FutureMap execute_task(F func_ptr, context &c, IdxSpace<DIM> &is, Args... a)
+  {
+    UserTask *t = get_user_task_obj((uintptr_t)func_ptr);
+    if (t != NULL) {
+      FutureMap fut = t->launch_index_task(func_ptr, c, is, a...);
+      return fut;
+    } else {
+      FutureMap fut;
       return fut;
     }
   }

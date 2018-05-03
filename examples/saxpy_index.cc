@@ -57,7 +57,8 @@ void check(context c, rw_region<1> region_xy, rw_region<1> region_z){
 
 void top_level(context c)
 { 
-  IdxSpace<1> ispace(c, 10);
+  IdxSpace<1> ispace(c, 12);
+  IdxSpace<1> color_is(c, 4);
   
   FdSpace input_fs(c);
   input_fs.add_field<float>(FID_X);
@@ -68,20 +69,25 @@ void top_level(context c)
   output_fs.add_field<float>(FID_Z);
   Region<1> output_lr(c, ispace, output_fs);
   
+  Partition<1> input_lp(c, input_lr, color_is);
+  Partition<1> output_lp(c, output_lr, color_is);
+  
   std::vector<field_id_t> x_vec{FID_X};
-  auto rw_x = rw_region<1>(input_lr, x_vec);
-  runtime.execute_task(init_value, c, rw_x);
+  auto rw_x = rw_region<1>(input_lp, x_vec);
+  runtime.execute_task(init_value, c, color_is, rw_x);
   
   std::vector<field_id_t> y_vec{FID_Y};
-  auto rw_y = rw_region<1>(input_lr, y_vec);
-  runtime.execute_task(init_value_y, c, rw_y);
+  auto rw_y = rw_region<1>(input_lp, y_vec);
+  runtime.execute_task(init_value_y, c, color_is, rw_y);
   
   float alpha = 2;
-  auto rw_xy = rw_region<1>(input_lr);
-  auto rw_z = rw_region<1>(output_lr);
-  runtime.execute_task(saxpy, c, alpha, rw_xy, rw_z);
+  auto rw_xy = rw_region<1>(input_lp);
+  auto rw_z = rw_region<1>(output_lp);
+  runtime.execute_task(saxpy, c, color_is, alpha, rw_xy, rw_z);
   
-  runtime.execute_task(check, c, rw_xy, rw_z);
+  auto rw_xy_all = rw_region<1>(input_lr);
+  auto rw_z_all = rw_region<1>(output_lr);
+  runtime.execute_task(check, c, rw_xy_all, rw_z_all);
   
  // call((print<float,1>), r);
 }
