@@ -50,7 +50,7 @@ struct context {
 template <size_t DIM>
 class IdxSpace {
 public:
-  Legion::IndexSpace idx_space;
+  Legion::IndexSpace is;
   Rect<DIM> rect;
 public:
   IdxSpace() {}
@@ -58,21 +58,21 @@ public:
   {
     rect = Rect<DIM>(Point<DIM>::ZEROES(), p-Point<DIM>::ONES());
     std::cout << "ispace set rect to be from " << Point<DIM>::ZEROES() << " to " << rect.hi << std::endl; 
-    idx_space = c.runtime->create_index_space(c.ctx, Legion::Domain::from_rect<DIM>(rect)); 
+    is = c.runtime->create_index_space(c.ctx, Legion::Domain::from_rect<DIM>(rect)); 
   }
 };
 
 class FdSpace {
 public:
-  Legion::FieldSpace fd_space;
+  Legion::FieldSpace fs;
   Legion::FieldAllocator allocator;
   std::vector<field_id_t> field_id_vector;
 public:
   FdSpace() {}
   FdSpace(const context& c)
   {
-    fd_space = c.runtime->create_field_space(c.ctx);
-    allocator = c.runtime->create_field_allocator(c.ctx, fd_space);
+    fs = c.runtime->create_field_space(c.ctx);
+    allocator = c.runtime->create_field_allocator(c.ctx, fs);
     field_id_vector.clear();
   }
   template <typename T>
@@ -88,16 +88,16 @@ class Region {
 public:
   Legion::LogicalRegion lr; 
   Legion::LogicalRegion lr_parent;
-  IdxSpace<DIM> is; // for partition
-  FdSpace *fs;
+  IdxSpace<DIM> idx_space; // for partition
+  FdSpace fd_space;
   std::vector<field_id_t> *field_id_vector;
 public:
   Region() {}
   Region(context &c, IdxSpace<DIM> &ispace, FdSpace &fspace)
   {
-    lr = c.runtime->create_logical_region(c.ctx, ispace.idx_space, fspace.fd_space);
+    lr = c.runtime->create_logical_region(c.ctx, ispace.is, fspace.fs);
     lr_parent = lr;
-    is = ispace;  
+    idx_space = ispace;  
     field_id_vector = &(fspace.field_id_vector);
   }
 };
@@ -110,9 +110,9 @@ public:
   Region<DIM> region;
 public:
   Partition() {}
-  Partition(context &c, Region<DIM> &r, IdxSpace<DIM> &is)
+  Partition(context &c, Region<DIM> &r, IdxSpace<DIM> &ispace)
   {
-    ip = c.runtime->create_equal_partition(c.ctx, r.is.idx_space, is.idx_space);
+    ip = c.runtime->create_equal_partition(c.ctx, r.idx_space.is, ispace.is);
     lp = c.runtime->get_logical_partition(c.ctx, r.lr, ip);
     region = r;
   }
@@ -700,11 +700,11 @@ public:
   }
   
   template <size_t DIM, typename F, typename ...Args>
-  FutureMap launch_index_task(F f, context &c, IdxSpace<DIM> &is, Args... a){
+  FutureMap launch_index_task(F f, context &c, IdxSpace<DIM> &ispace, Args... a){
     typedef typename function_traits<F>::args argtuple;
     argtuple p = std::make_tuple(a...);
     Legion::ArgumentMap arg_map; 
-    Legion::IndexLauncher index_launcher(id, is.idx_space, Legion::TaskArgument(&p, sizeof(p)), arg_map); 
+    Legion::IndexLauncher index_launcher(id, ispace.is, Legion::TaskArgument(&p, sizeof(p)), arg_map); 
     regionArgReqsIndex(index_launcher, p);  
     return FutureMap(c.runtime->execute_index_space(c.ctx, index_launcher));
   }
