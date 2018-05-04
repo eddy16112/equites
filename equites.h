@@ -268,6 +268,8 @@ struct base_region{
   base_region()
   {
     is_pr_mapped = false;
+    task_field_vector.clear();
+    printf("base constructor\n");
   }; 
   base_region(const Rect<ndim> r) : rect(r) {}; 
   class iterator: public Legion::PointInDomainIterator<ndim>{
@@ -278,7 +280,7 @@ struct base_region{
     iterator& operator++(int) {Legion::PointInDomainIterator<ndim>::step(); return *this; }
     const Legion::Point<ndim>& operator*(void) { return Legion::PointInDomainIterator<ndim>::operator*(); }
   }; 
-
+  /*
   Legion::RegionRequirement rr(){
     Legion::RegionRequirement req(this->l, this->pm, this->cp, this->parent); 
     req.add_field(OnlyField); 
@@ -288,13 +290,14 @@ struct base_region{
   void setPhysical(context &c, Legion::PhysicalRegion &p){
     this->p = p;
    // this->acc = Legion::FieldAccessor<NO_ACCESS, a, ndim>(p, OnlyField);
-  }
+  }*/
 
   bool is_pr_mapped;
   Legion::Domain domain;
   Region<ndim> *region;
   Partition<ndim> *partition;
   Legion::PhysicalRegion pr;
+  std::vector<field_id_t> task_field_vector;
   
   //Legion::FieldAccessor<NO_ACCESS, a, ndim> acc; 
   Legion::PhysicalRegion p;
@@ -358,7 +361,7 @@ struct rw_region : virtual base_region<ndim>{
   {
     Legion::RegionRequirement req(this->region->lr, this->pm, this->cp, this->region->lr_parent);
     std::vector<field_id_t>::iterator it; 
-    for (it = task_field_vector.begin(); it < task_field_vector.end(); it++) {
+    for (it = this->task_field_vector.begin(); it < this->task_field_vector.end(); it++) {
       printf("rw set RR fid %d\n", *it);
       req.add_field(*it); 
     }
@@ -369,7 +372,7 @@ struct rw_region : virtual base_region<ndim>{
   {
     Legion::RegionRequirement req(this->partition->lp, 0, this->pm, this->cp, this->region->lr);
     std::vector<field_id_t>::iterator it; 
-    for (it = task_field_vector.begin(); it < task_field_vector.end(); it++) {
+    for (it = this->task_field_vector.begin(); it < this->task_field_vector.end(); it++) {
       printf("index rw set RR fid %d\n", *it);
       req.add_field(*it); 
     }
@@ -407,25 +410,23 @@ struct rw_region : virtual base_region<ndim>{
   rw_region(Region<ndim> *region, std::vector<field_id_t> &task_field_id_vec)
   {
     this->region = region;
-    task_field_vector.clear();
     accessor_map.clear();
     std::vector<field_id_t>::iterator it; 
     for (it = task_field_id_vec.begin(); it != task_field_id_vec.end(); it++) {
        printf("rw set fid %d\n", *it);
-       task_field_vector.push_back(*it); 
+       this->task_field_vector.push_back(*it); 
     }
   }
   
   rw_region(Region<ndim> *region)
   {
     this->region = region;
-    task_field_vector.clear();
     accessor_map.clear();
     std::vector<field_id_t> &task_field_id_vec = this->region->fd_space.field_id_vector;
     std::vector<field_id_t>::iterator it; 
     for (it = task_field_id_vec.begin(); it != task_field_id_vec.end(); it++) {
        printf("rw set fid %d\n", *it);
-       task_field_vector.push_back(*it); 
+       this->task_field_vector.push_back(*it); 
     }
   }
   
@@ -433,12 +434,11 @@ struct rw_region : virtual base_region<ndim>{
   {
     this->partition = par;
     this->region = &(par->region);
-    task_field_vector.clear();
     accessor_map.clear();
     std::vector<field_id_t>::iterator it; 
     for (it = task_field_id_vec.begin(); it != task_field_id_vec.end(); it++) {
        printf("rw set fid %d\n", *it);
-       task_field_vector.push_back(*it); 
+       this->task_field_vector.push_back(*it); 
     }
   }
   
@@ -446,13 +446,12 @@ struct rw_region : virtual base_region<ndim>{
   {
     this->partition = par;
     this->region = &(par->region);
-    task_field_vector.clear();
     accessor_map.clear();
     std::vector<field_id_t> &task_field_id_vec = this->region->fd_space.field_id_vector;
     std::vector<field_id_t>::iterator it; 
     for (it = task_field_id_vec.begin(); it != task_field_id_vec.end(); it++) {
        printf("rw set fid %d\n", *it);
-       task_field_vector.push_back(*it); 
+       this->task_field_vector.push_back(*it); 
     }
   }
   
@@ -466,7 +465,7 @@ struct rw_region : virtual base_region<ndim>{
         it->second = NULL;
       }
     }
-    task_field_vector.clear();
+    this->task_field_vector.clear();
     accessor_map.clear();
   }
   
@@ -474,28 +473,18 @@ struct rw_region : virtual base_region<ndim>{
   {
     this->pr = pr;
     std::set<field_id_t>::iterator it;
-    task_field_vector.clear();
+    this->task_field_vector.clear();
     accessor_map.clear();
     for (it = rr.privilege_fields.begin(); it != rr.privilege_fields.end(); it++) {
       int field_id = *(it);
-      task_field_vector.push_back(*it);
+      this->task_field_vector.push_back(*it);
       printf("rr field %d, set acc \n", field_id);
-     // Legion::FieldAccessor<READ_WRITE, a, ndim> acc(pr, field_id);
       void *null_ptr = NULL;
       accessor_map.insert(std::make_pair(*it, null_ptr)); 
     }
     
     this->domain = c.runtime->get_index_space_domain(c.ctx, rr.region.get_index_space());
-  }
-  
-  void set_task_field(field_id_t fid)
-  {
-    task_field_vector.push_back(fid);
-  }
-  
-  void clear_task_field()
-  {
-    task_field_vector.clear();
+    this->is_pr_mapped = true;
   }
   
   template< typename a>
@@ -519,11 +508,10 @@ struct rw_region : virtual base_region<ndim>{
   template< typename a>
   Legion::FieldAccessor<READ_WRITE, a, ndim>* get_default_accessor()
   {
-    assert(task_field_vector.size() == 1);
-    return get_accessor_by_fid<a>(task_field_vector[0]);
+    assert(this->task_field_vector.size() == 1);
+    return get_accessor_by_fid<a>(this->task_field_vector[0]);
   }
 
-  std::vector<field_id_t> task_field_vector;
   std::map<field_id_t, void*> accessor_map; 
   const static legion_privilege_mode_t pm = READ_WRITE;
 };
