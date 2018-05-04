@@ -6,15 +6,15 @@ enum FieldIDs {
   FID_Y,
 };
 
-void init_value(context c, rw_region<2> region_xy){
-  for (rw_region<2>::iterator pir(region_xy); pir(); pir++) {
+void init_value(context c, WD_Region<2> region_xy){
+  for (WD_Region<2>::iterator pir(region_xy); pir(); pir++) {
     float value = 2;
     region_xy.write<float>(FID_X, *pir, value);
     region_xy.write<float>(FID_Y, *pir, value);
   }
 }
 
-void print_value(context c, rw_region<2> region_xy){
+void print_value(context c, RO_Region<2> region_xy){
   /*
   for(auto i : ab) {
     float z = c.read(i, FID_Z);
@@ -23,7 +23,7 @@ void print_value(context c, rw_region<2> region_xy){
     printf("x %f, y %f, z %f\n", x, y, z);
   } */
   
-  for (rw_region<2>::iterator pir(region_xy); pir(); pir++) {
+  for (RO_Region<2>::iterator pir(region_xy); pir(); pir++) {
     float x = region_xy.read<float>(FID_X, *pir);
     double y = region_xy.read<float>(FID_Y, *pir);
     printf("x %f, y %f\n", x, y);
@@ -39,11 +39,11 @@ void top_level(context c)
   input_fs.add_field<float>(FID_Y);
   Region<2> input_lr(c, ispace, input_fs);
   
-  float alpha = 2;
-  auto rw_xy = rw_region<2>(input_lr);
-  runtime.execute_task(init_value, c, rw_xy);
+  auto wd_xy = WD_Region<2>(&input_lr);
+  runtime.execute_task(init_value, c, wd_xy);
   
-  runtime.execute_task(print_value, c, rw_xy);
+  auto ro_xy = RO_Region<2>(&input_lr);
+  runtime.execute_task(print_value, c, ro_xy);
   
  // call((print<float,1>), r);
 }

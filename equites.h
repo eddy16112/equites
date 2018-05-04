@@ -50,31 +50,44 @@ struct context {
 template <size_t DIM>
 class IdxSpace {
 public:
+  const context &ctx;
   Legion::IndexSpace is;
   Rect<DIM> rect;
 public:
-  IdxSpace() {}
-  IdxSpace(const context& c, Point<DIM> p)
+ // IdxSpace() {}
+  IdxSpace(const context& c, Point<DIM> p) : ctx(c)
   {
     rect = Rect<DIM>(Point<DIM>::ZEROES(), p-Point<DIM>::ONES());
     std::cout << "ispace set rect to be from " << Point<DIM>::ZEROES() << " to " << rect.hi << std::endl; 
     is = c.runtime->create_index_space(c.ctx, Legion::Domain::from_rect<DIM>(rect)); 
   }
+  
+  ~IdxSpace()
+  {
+    ctx.runtime->destroy_index_space(ctx.ctx, is);
+  }
 };
 
 class FdSpace {
 public:
+  const context &ctx;
   Legion::FieldSpace fs;
   Legion::FieldAllocator allocator;
   std::vector<field_id_t> field_id_vector;
 public:
-  FdSpace() {}
-  FdSpace(const context& c)
+ // FdSpace() {}
+  FdSpace(const context& c) : ctx(c)
   {
     fs = c.runtime->create_field_space(c.ctx);
     allocator = c.runtime->create_field_allocator(c.ctx, fs);
     field_id_vector.clear();
   }
+  
+  ~FdSpace()
+  {
+    ctx.runtime->destroy_field_space(ctx.ctx, fs);
+  }
+  
   template <typename T>
   void add_field(field_id_t fid)
   {
@@ -86,16 +99,22 @@ public:
 template <size_t DIM>
 class Region {
 public:
+  const context &ctx;
   IdxSpace<DIM> &idx_space; // for partition
   FdSpace &fd_space;
   Legion::LogicalRegion lr; 
   Legion::LogicalRegion lr_parent;
 public:
   //Region() {}
-  Region(context &c, IdxSpace<DIM> &ispace, FdSpace &fspace) : idx_space(ispace), fd_space(fspace)
+  Region(const context &c, IdxSpace<DIM> &ispace, FdSpace &fspace) : ctx(c), idx_space(ispace), fd_space(fspace)
   {
     lr = c.runtime->create_logical_region(c.ctx, ispace.is, fspace.fs);
     lr_parent = lr;
+  }
+  
+  ~Region()
+  {
+    ctx.runtime->destroy_logical_region(ctx.ctx, lr);
   }
 };
 
@@ -111,6 +130,11 @@ public:
   {
     ip = c.runtime->create_equal_partition(c.ctx, r.idx_space.is, ispace.is);
     lp = c.runtime->get_logical_partition(c.ctx, r.lr, ip);
+  }
+  
+  ~Partition()
+  {
+    
   }
 };
 
@@ -375,22 +399,40 @@ public:
     return req; 
   };
   
-  void setPhysical(context &c, Legion::PhysicalRegion &pr, Legion::RegionRequirement &rr)
+  void map_physical(context &c, Legion::PhysicalRegion &pr, Legion::RegionRequirement &rr)
   {
+    init_parameters();
     physical_region = pr;
     std::set<field_id_t>::iterator it;
-    task_field_vector.clear();
-    accessor_map.clear();
     for (it = rr.privilege_fields.begin(); it != rr.privilege_fields.end(); it++) {
-      int field_id = *(it);
       task_field_vector.push_back(*it);
-      printf("rr field %d, set acc \n", field_id);
+      printf("map_physical rr field %d, set acc \n", *it);
       void *null_ptr = NULL;
       accessor_map.insert(std::make_pair(*it, null_ptr)); 
     }
     
     domain = c.runtime->get_index_space_domain(c.ctx, rr.region.get_index_space());
     is_pr_mapped = true;
+  }
+  
+  void map_physical_inline(context &c)
+  {
+    Legion::RegionRequirement req(region->lr, pm, cp, region->lr_parent);
+    std::vector<field_id_t>::iterator it; 
+    for (it = task_field_vector.begin(); it < task_field_vector.end(); it++) {
+      printf("base set RR fid %d\n", *it);
+      req.add_field(*it);
+      void *null_ptr = NULL;
+      accessor_map.insert(std::make_pair(*it, null_ptr));  
+    }
+    physical_region = c.runtime->map_region(c.ctx, req);
+    domain = c.runtime->get_index_space_domain(c.ctx, req.region.get_index_space());
+    is_pr_mapped = true;
+  }
+  
+  void unmap_physical_inline(context &c)
+  {
+    c.runtime->unmap_region(c.ctx, physical_region);
   }
   
   class iterator: public Legion::PointInDomainIterator<ndim>{
@@ -405,6 +447,8 @@ public:
 private:  
   void init_parameters()
   {
+    region = NULL;
+    partition = NULL;
     is_pr_mapped = false;
     task_field_vector.clear();
     accessor_map.clear();
@@ -420,6 +464,7 @@ public:
   template< typename a>
   a read(int fid, Legion::Point<ndim> i)
   {
+    assert(this->is_pr_mapped == true);
     Legion::FieldAccessor<READ_ONLY, a, ndim> *acc = get_accessor_by_fid<a>(fid);
     return (*acc)[i];
   };
@@ -427,6 +472,7 @@ public:
   template< typename a>
   a read(Legion::Point<ndim> i)
   {
+    assert(this->is_pr_mapped == true);
     Legion::FieldAccessor<READ_ONLY, a, ndim> *acc = get_default_accessor<a>();
     return (*acc)[i];
   };
@@ -500,6 +546,7 @@ public:
   template< typename a>
   void write(int fid, Legion::Point<ndim> i, a x)
   {
+    assert(this->is_pr_mapped == true);
     Legion::FieldAccessor<WRITE_DISCARD, a, ndim> *acc = get_accessor_by_fid<a>(fid);
     (*acc)[i] = x; 
   }
@@ -507,6 +554,7 @@ public:
   template< typename a>
   void write(Legion::Point<ndim> i, a x)
   {
+    assert(this->is_pr_mapped == true);
     Legion::FieldAccessor<WRITE_DISCARD, a, ndim> *acc = get_default_accessor<a>();
     (*acc)[i] = x; 
   }
@@ -579,6 +627,7 @@ public:
   template< typename a>
   a read(int fid, Legion::Point<ndim> i)
   {
+    assert(this->is_pr_mapped == true);
     Legion::FieldAccessor<READ_WRITE, a, ndim> *acc = get_accessor_by_fid<a>(fid);
     return (*acc)[i];
   };
@@ -586,6 +635,7 @@ public:
   template< typename a>
   a read(Legion::Point<ndim> i)
   {
+    assert(this->is_pr_mapped == true);
     Legion::FieldAccessor<READ_WRITE, a, ndim> *acc = get_default_accessor<a>();
     return (*acc)[i];
   };
@@ -593,6 +643,7 @@ public:
   template< typename a>
   void write(int fid, Legion::Point<ndim> i, a x)
   {
+    assert(this->is_pr_mapped == true);
     Legion::FieldAccessor<READ_WRITE, a, ndim> *acc = get_accessor_by_fid<a>(fid);
     (*acc)[i] = x; 
   }
@@ -600,6 +651,7 @@ public:
   template< typename a>
   void write(Legion::Point<ndim> i, a x)
   {
+    assert(this->is_pr_mapped == true);
     Legion::FieldAccessor<READ_WRITE, a, ndim> *acc = get_default_accessor<a>();
     (*acc)[i] = x; 
   }
@@ -703,7 +755,7 @@ inline typename std::enable_if<!std::is_base_of<Base_Region<ndim>, t<ndim>>::val
 template <size_t ndim, template <size_t> typename t>
 inline typename std::enable_if<std::is_base_of<Base_Region<ndim>, t<ndim>>::value, int>::type
 bindPhysical(context &c, std::vector<Legion::PhysicalRegion> pr, std::vector<Legion::RegionRequirement> rr, size_t i, t<ndim> *r){
-  r->setPhysical(c, std::ref(pr[i]), std::ref(rr[i]));    
+  r->map_physical(c, std::ref(pr[i]), std::ref(rr[i]));    
   return i+1; 
 };
 
@@ -807,9 +859,10 @@ class UserTask {
 public:
   static const UserTask NO_USER_TASK;
   Legion::TaskID id;
+  std::string task_name;
 
 public:
-  UserTask(const char* name="default")
+  UserTask(const char* name="default") : task_name(name)
   {
     id = globalId++; // still not sure about this
   }
@@ -818,7 +871,7 @@ public:
   {
     typedef typename function_traits<F>::returnType RT; 
     Legion::ProcessorConstraint pc = Legion::ProcessorConstraint(Legion::Processor::LOC_PROC);
-    Legion::TaskVariantRegistrar registrar(id, "name");
+    Legion::TaskVariantRegistrar registrar(id, task_name.c_str());
     registrar.add_constraint(pc);
     regTask<RT, F, f>::variant(registrar); 
   }

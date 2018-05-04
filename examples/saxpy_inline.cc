@@ -59,24 +59,36 @@ void top_level(context c)
   output_fs.add_field<float>(FID_Z);
   Region<1> output_lr(c, ispace, output_fs);
   
-  std::vector<field_id_t> x_vec{FID_X};
-  auto wd_x = WD_Region<1>(&input_lr, x_vec);
-  runtime.execute_task(init_value, c, wd_x);
-  
-  std::vector<field_id_t> y_vec{FID_Y};
-  auto wd_y = WD_Region<1>(&input_lr, y_vec);
-  runtime.execute_task(init_value, c, wd_y);
-  
   float alpha = 2;
   auto rw_xy = RW_Region<1>(&input_lr);
   auto wd_z = WD_Region<1>(&output_lr);
-  runtime.execute_task(saxpy, c, alpha, rw_xy, wd_z);
   
-  auto ro_xy = RO_Region<1>(&input_lr);
+  rw_xy.map_physical_inline(c);
+  wd_z.map_physical_inline(c);
+  
+  for (RW_Region<1>::iterator pir(rw_xy); pir(); pir++) {
+    rw_xy.write<float>(FID_X, *pir, 1);
+    rw_xy.write<float>(FID_Y, *pir, 2);
+  }
+  
+  for (RW_Region<1>::iterator pir(rw_xy); pir(); pir++) {
+    float x = rw_xy.read<float>(FID_X, *pir);
+    float y = rw_xy.read<float>(FID_Y, *pir);
+    wd_z.write<float>(FID_Z, *pir, x * alpha + y);
+  }
+  
+  
+  wd_z.unmap_physical_inline(c);
   auto ro_z = RO_Region<1>(&output_lr);
-  runtime.execute_task(check, c, ro_xy, ro_z);
+  ro_z.map_physical_inline(c);
   
- // call((print<float,1>), r);
+  for (RO_Region<1>::iterator pir(ro_z); pir(); pir++) {
+    float x = rw_xy.read<float>(FID_X, *pir);
+    float y = rw_xy.read<float>(FID_Y, *pir);
+    float z = ro_z.read<float>(FID_Z, *pir);
+    printf("x %f, y %f, z %f\n", x, y, z);
+  }
+  
 }
 
 int main(int argc, char** argv){
