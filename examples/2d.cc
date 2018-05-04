@@ -1,17 +1,56 @@
 #include <equites.h>
 using namespace equites;
 
-task(void, toplevel){
-  auto r1 = region(float, 2, make_point(2, 2));
-  auto r2 = region(float, 2, make_point(2, 2));
-  call((fill<float,2>), r1, 3.14159); 
-  std::cout << "r1" << std::endl; 
-  call((copy<float,2>), r1, r2);
-  call((print<float,2>), r1).get(); 
-  std::cout << "r2" << std::endl; 
-  call((print<float,2>), r2);
+enum FieldIDs {
+  FID_X = 3,
+  FID_Y,
+};
+
+void init_value(context c, rw_region<2> region_xy){
+  for (rw_region<2>::iterator pir(region_xy); pir(); pir++) {
+    float value = 2;
+    region_xy.write<float>(FID_X, *pir, value);
+    region_xy.write<float>(FID_Y, *pir, value);
+  }
+}
+
+void print_value(context c, rw_region<2> region_xy){
+  /*
+  for(auto i : ab) {
+    float z = c.read(i, FID_Z);
+    float x = ab.read(i, FID_X);
+    float y = ab.read(i, FID_Y);
+    printf("x %f, y %f, z %f\n", x, y, z);
+  } */
+  
+  for (rw_region<2>::iterator pir(region_xy); pir(); pir++) {
+    float x = region_xy.read<float>(FID_X, *pir);
+    double y = region_xy.read<float>(FID_Y, *pir);
+    printf("x %f, y %f\n", x, y);
+  }
+}
+
+void top_level(context c)
+{ 
+  IdxSpace<2> ispace(c, make_point(2,2));
+  
+  FdSpace input_fs(c);
+  input_fs.add_field<float>(FID_X);
+  input_fs.add_field<float>(FID_Y);
+  Region<2> input_lr(c, ispace, input_fs);
+  
+  float alpha = 2;
+  auto rw_xy = rw_region<2>(input_lr);
+  runtime.execute_task(init_value, c, rw_xy);
+  
+  runtime.execute_task(print_value, c, rw_xy);
+  
+ // call((print<float,1>), r);
 }
 
 int main(int argc, char** argv){
-  start(toplevel, argc, argv);
+  runtime.register_task<decltype(&top_level), top_level>("top_level");
+  runtime.register_task<decltype(&init_value), init_value>("init_value");
+  runtime.register_task<decltype(&print_value), print_value>("print_value");
+  runtime.start(top_level, argc, argv);
 }

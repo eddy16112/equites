@@ -23,9 +23,12 @@ void saxpy(context c, float alpha, rw_region<1> region_xy, rw_region<1> region_z
 }
 
 void init_value(context c, rw_region<1> region_xy){
+//  int i = 0;
   for (rw_region<1>::iterator pir(region_xy); pir(); pir++) {
     float value = 2;
     region_xy.write<float>(*pir, value);
+    //printf("i %d\n", i);
+    //i++;
    // region_xy.write(*pir, FID_Y, y);
   }
 }

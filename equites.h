@@ -89,6 +89,7 @@ public:
   Legion::LogicalRegion lr; 
   Legion::LogicalRegion lr_parent;
   IdxSpace<DIM> is; // for partition
+  FdSpace *fs;
   std::vector<field_id_t> *field_id_vector;
 public:
   Region() {}
@@ -268,7 +269,10 @@ struct _region{
 /* _region is an abstract class */
 template <size_t ndim>
 struct base_region{
-  base_region(){}; 
+  base_region()
+  {
+    is_pr_mapped = false;
+  }; 
   base_region(const Rect<ndim> r) : rect(r) {}; 
   class iterator: public Legion::PointInDomainIterator<ndim>{
     public: 
@@ -290,6 +294,7 @@ struct base_region{
    // this->acc = Legion::FieldAccessor<NO_ACCESS, a, ndim>(p, OnlyField);
   }
 
+  bool is_pr_mapped;
   Legion::Domain domain;
   Region<ndim> region;
   Partition<ndim> partition;
@@ -325,7 +330,6 @@ struct r_region : virtual base_region<ndim> {
     //this->acc = Legion::FieldAccessor<READ_ONLY, a, ndim>(p, OnlyField);
   }
 
-//  Legion::FieldAccessor<READ_ONLY, a, ndim> acc; 
   const static legion_privilege_mode_t pm = READ_ONLY;  
 };
 
@@ -462,7 +466,7 @@ struct rw_region : virtual base_region<ndim>{
     for (it = accessor_map.begin(); it != accessor_map.end(); it++) {
       if (it->second != NULL) {
         printf("free accessor of fid %d\n", it->first);
-       // delete it->second;
+        delete it->second;
         it->second = NULL;
       }
     }
