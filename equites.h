@@ -86,35 +86,31 @@ public:
 template <size_t DIM>
 class Region {
 public:
+  IdxSpace<DIM> &idx_space; // for partition
+  FdSpace &fd_space;
   Legion::LogicalRegion lr; 
   Legion::LogicalRegion lr_parent;
-  IdxSpace<DIM> idx_space; // for partition
-  FdSpace fd_space;
-  std::vector<field_id_t> *field_id_vector;
 public:
-  Region() {}
-  Region(context &c, IdxSpace<DIM> &ispace, FdSpace &fspace)
+  //Region() {}
+  Region(context &c, IdxSpace<DIM> &ispace, FdSpace &fspace) : idx_space(ispace), fd_space(fspace)
   {
     lr = c.runtime->create_logical_region(c.ctx, ispace.is, fspace.fs);
     lr_parent = lr;
-    idx_space = ispace;  
-    field_id_vector = &(fspace.field_id_vector);
   }
 };
 
 template <size_t DIM>
 class Partition {
 public:
+  Region<DIM> &region;
   Legion::IndexPartition ip;
   Legion::LogicalPartition lp;
-  Region<DIM> region;
 public:
-  Partition() {}
-  Partition(context &c, Region<DIM> &r, IdxSpace<DIM> &ispace)
+//  Partition() {}
+  Partition(context &c, Region<DIM> &r, IdxSpace<DIM> &ispace) : region(r)
   {
     ip = c.runtime->create_equal_partition(c.ctx, r.idx_space.is, ispace.is);
     lp = c.runtime->get_logical_partition(c.ctx, r.lr, ip);
-    region = r;
   }
 };
 
@@ -296,8 +292,8 @@ struct base_region{
 
   bool is_pr_mapped;
   Legion::Domain domain;
-  Region<ndim> region;
-  Partition<ndim> partition;
+  Region<ndim> *region;
+  Partition<ndim> *partition;
   Legion::PhysicalRegion pr;
   
   //Legion::FieldAccessor<NO_ACCESS, a, ndim> acc; 
@@ -358,9 +354,9 @@ struct w_region : virtual base_region<ndim> {
 // read-write region
 template <size_t ndim>
 struct rw_region : virtual base_region<ndim>{
-  Legion::RegionRequirement rr()
+  Legion::RegionRequirement set_region_requirement_single()
   {
-    Legion::RegionRequirement req(this->region.lr, this->pm, this->cp, this->region.lr_parent);
+    Legion::RegionRequirement req(this->region->lr, this->pm, this->cp, this->region->lr_parent);
     std::vector<field_id_t>::iterator it; 
     for (it = task_field_vector.begin(); it < task_field_vector.end(); it++) {
       printf("rw set RR fid %d\n", *it);
@@ -369,9 +365,9 @@ struct rw_region : virtual base_region<ndim>{
     return req; 
   };
   
-  Legion::RegionRequirement rr_index()
+  Legion::RegionRequirement set_region_requirement_index()
   {
-    Legion::RegionRequirement req(this->partition.lp, 0, this->pm, this->cp, this->region.lr);
+    Legion::RegionRequirement req(this->partition->lp, 0, this->pm, this->cp, this->region->lr);
     std::vector<field_id_t>::iterator it; 
     for (it = task_field_vector.begin(); it < task_field_vector.end(); it++) {
       printf("index rw set RR fid %d\n", *it);
@@ -408,7 +404,7 @@ struct rw_region : virtual base_region<ndim>{
     (*acc)[i] = x; 
   }
 
-  rw_region(Region<ndim> &region, std::vector<field_id_t> &task_field_id_vec)
+  rw_region(Region<ndim> *region, std::vector<field_id_t> &task_field_id_vec)
   {
     this->region = region;
     task_field_vector.clear();
@@ -420,23 +416,23 @@ struct rw_region : virtual base_region<ndim>{
     }
   }
   
-  rw_region(Region<ndim> &region)
+  rw_region(Region<ndim> *region)
   {
     this->region = region;
     task_field_vector.clear();
     accessor_map.clear();
-    std::vector<field_id_t> *task_field_id_vec = region.field_id_vector;
+    std::vector<field_id_t> &task_field_id_vec = this->region->fd_space.field_id_vector;
     std::vector<field_id_t>::iterator it; 
-    for (it = task_field_id_vec->begin(); it != task_field_id_vec->end(); it++) {
+    for (it = task_field_id_vec.begin(); it != task_field_id_vec.end(); it++) {
        printf("rw set fid %d\n", *it);
        task_field_vector.push_back(*it); 
     }
   }
   
-  rw_region(Partition<ndim> &par, std::vector<field_id_t> &task_field_id_vec)
+  rw_region(Partition<ndim> *par, std::vector<field_id_t> &task_field_id_vec)
   {
     this->partition = par;
-    this->region = par.region;
+    this->region = &(par->region);
     task_field_vector.clear();
     accessor_map.clear();
     std::vector<field_id_t>::iterator it; 
@@ -446,15 +442,15 @@ struct rw_region : virtual base_region<ndim>{
     }
   }
   
-  rw_region(Partition<ndim> &par)
+  rw_region(Partition<ndim> *par)
   {
     this->partition = par;
-    this->region = par.region;
+    this->region = &(par->region);
     task_field_vector.clear();
     accessor_map.clear();
-    std::vector<field_id_t> *task_field_id_vec = this->region.field_id_vector;
+    std::vector<field_id_t> &task_field_id_vec = this->region->fd_space.field_id_vector;
     std::vector<field_id_t>::iterator it; 
-    for (it = task_field_id_vec->begin(); it != task_field_id_vec->end(); it++) {
+    for (it = task_field_id_vec.begin(); it != task_field_id_vec.end(); it++) {
        printf("rw set fid %d\n", *it);
        task_field_vector.push_back(*it); 
     }
@@ -609,7 +605,7 @@ registerRR(Legion::TaskLauncher &l, t<ndim> &r){ };
 template <size_t ndim, template <size_t> typename t>
 inline typename std::enable_if<std::is_base_of<base_region<ndim>, t<ndim>>::value, void>::type
 registerRR(Legion::TaskLauncher &l, t<ndim> &r){
-  l.add_region_requirement(r.rr());    
+  l.add_region_requirement(r.set_region_requirement_single());    
   //printf("registered region\n"); 
 };
 
@@ -635,7 +631,7 @@ registerRRIndex(Legion::IndexLauncher &l, t<ndim> &r){ };
 template <size_t ndim, template <size_t> typename t>
 inline typename std::enable_if<std::is_base_of<base_region<ndim>, t<ndim>>::value, void>::type
 registerRRIndex(Legion::IndexLauncher &l, t<ndim> &r){
-  l.add_region_requirement(r.rr_index());    
+  l.add_region_requirement(r.set_region_requirement_index());    
   //printf("registered region\n"); 
 };
 

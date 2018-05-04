@@ -76,20 +76,20 @@ void top_level(context c)
   Partition<1> output_lp(c, output_lr, color_is);
   
   std::vector<field_id_t> x_vec{FID_X};
-  auto rw_x = rw_region<1>(input_lp, x_vec);
+  auto rw_x = rw_region<1>(&input_lp, x_vec);
   runtime.execute_task(init_value, c, color_is, rw_x);
   
   std::vector<field_id_t> y_vec{FID_Y};
-  auto rw_y = rw_region<1>(input_lp, y_vec);
+  auto rw_y = rw_region<1>(&input_lp, y_vec);
   runtime.execute_task(init_value_y, c, color_is, rw_y);
   
   float alpha = 2;
-  auto rw_xy = rw_region<1>(input_lp);
-  auto rw_z = rw_region<1>(output_lp);
+  auto rw_xy = rw_region<1>(&input_lp);
+  auto rw_z = rw_region<1>(&output_lp);
   runtime.execute_task(saxpy, c, color_is, alpha, rw_xy, rw_z);
   
-  auto rw_xy_all = rw_region<1>(input_lr);
-  auto rw_z_all = rw_region<1>(output_lr);
+  auto rw_xy_all = rw_region<1>(&input_lr);
+  auto rw_z_all = rw_region<1>(&output_lr);
   runtime.execute_task(check, c, rw_xy_all, rw_z_all);
   
  // call((print<float,1>), r);
