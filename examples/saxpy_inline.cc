@@ -63,8 +63,8 @@ void top_level(context c)
   auto rw_xy = RW_Region<1>(&input_lr);
   auto wd_z = WD_Region<1>(&output_lr);
   
-  rw_xy.map_physical_inline(c);
-  wd_z.map_physical_inline(c);
+  rw_xy.map_physical_region_inline();
+  wd_z.map_physical_region_inline();
   
   for (RW_Region<1>::iterator pir(rw_xy); pir(); pir++) {
     rw_xy.write<float>(FID_X, *pir, 1);
@@ -78,9 +78,9 @@ void top_level(context c)
   }
   
   
-  wd_z.unmap_physical_inline(c);
+ // wd_z.unmap_physical_region_inline();
   auto ro_z = RO_Region<1>(&output_lr);
-  ro_z.map_physical_inline(c);
+  ro_z.map_physical_region_inline();
   
   for (RO_Region<1>::iterator pir(ro_z); pir(); pir++) {
     float x = rw_xy.read<float>(FID_X, *pir);

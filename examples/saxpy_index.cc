@@ -15,11 +15,15 @@ void saxpy(context c, float alpha, RW_Region<1> region_xy, WD_Region<1> region_z
     float y = ab.read(i, FID_Y);
     c.write(i, FID_Z, z + x * alpha + y);
   }*/
+  
+  const int point = c.task->index_point.point_data[0];
+  
   for (RW_Region<1>::iterator pir(region_xy); pir(); pir++) {
     float x = region_xy.read<float>(FID_X, *pir);
     double y = region_xy.read<double>(FID_Y, *pir);
     region_z.write<float>(FID_Z, *pir, x * alpha + y);
   }
+  printf("saxpy point %d\n", point);
 }
 
 void init_value(context c, WD_Region<1> region_xy){
