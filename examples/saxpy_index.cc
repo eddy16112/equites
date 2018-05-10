@@ -8,32 +8,26 @@ enum FieldIDs {
 };
 
 void saxpy(context c, float alpha, RO_Region<1> region_xy, WD_Region<1> region_z){
-  /*
-  for(auto i : ab) {
-    float z = c.read(i, FID_Z);
-    float x = ab.read(i, FID_X);
-    float y = ab.read(i, FID_Y);
-    c.write(i, FID_Z, z + x * alpha + y);
-  }*/
+  for(auto pir : region_xy) {
+    float x = region_xy.read<float>(FID_X, pir);
+    float y = region_xy.read<float>(FID_Y, pir);
+    region_z.write<float>(FID_Z, pir, x * alpha + y);
+  }
   
   const int point = c.task->index_point.point_data[0];
-  
+  /*
   for (RO_Region<1>::iterator pir(region_xy); pir(); pir++) {
     float x = region_xy.read<float>(FID_X, *pir);
     float y = region_xy.read<float>(FID_Y, *pir);
     region_z.write<float>(FID_Z, *pir, x * alpha + y);
-  }
+  }*/
   printf("saxpy point %d\n", point);
 }
 
 void init_value(context c, WD_Region<1> region_xy){
-//  int i = 0;
   for (WD_Region<1>::iterator pir(region_xy); pir(); pir++) {
     float value = 2;
     region_xy.write<float>(*pir, value);
-    //printf("i %d\n", i);
-    //i++;
-   // region_xy.write(*pir, FID_Y, y);
   }
 }
 

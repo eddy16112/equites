@@ -8,18 +8,25 @@ enum FieldIDs {
 };
 
 void saxpy(context c, float alpha, RO_Region<1> region_xy, WD_Region<1> region_z){
+  
+  for(auto pir : region_xy) {
+    float x = region_xy.read<float>(FID_X, pir);
+    float y = region_xy.read<float>(FID_Y, pir);
+    region_z.write<float>(FID_Z, pir, x * alpha + y);
+  }
   /*
-  for(auto i : ab) {
-    float z = c.read(i, FID_Z);
-    float x = ab.read(i, FID_X);
-    float y = ab.read(i, FID_Y);
-    c.write(i, FID_Z, z + x * alpha + y);
+  RO_Region<1>::iterator pir;
+  for(pir = region_xy.begin(); pir != region_xy.end(); pir++) {
+    float x = region_xy.read<float>(FID_X, *pir);
+    float y = region_xy.read<float>(FID_Y, *pir);
+    region_z.write<float>(FID_Z, *pir, x * alpha + y);
   }*/
+  /*
   for (RO_Region<1>::iterator pir(region_xy); pir(); pir++) {
     float x = region_xy.read<float>(FID_X, *pir);
     float y = region_xy.read<float>(FID_Y, *pir);
     region_z.write<float>(FID_Z, *pir, x * alpha + y);
-  }
+  }*/
 }
 
 void init_value(context c, WD_Region<1> region_xy){

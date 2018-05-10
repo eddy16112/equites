@@ -420,6 +420,8 @@ public:
     region = NULL;
     partition = NULL;
     ctx = NULL;
+    if (end_itr != NULL) delete end_itr;
+    end_itr = NULL;
   //  printf("base de-constructor\n");
   }
   
@@ -494,12 +496,42 @@ public:
   
   class iterator: public Legion::PointInDomainIterator<DIM>{
     public: 
+    iterator() {}
     explicit iterator(Base_Region &r) : Legion::PointInDomainIterator<DIM>(r.domain) {} 
     bool operator()(void) {return Legion::PointInDomainIterator<DIM>::operator()();}
     iterator& operator++(void) {Legion::PointInDomainIterator<DIM>::step(); return *this; }
     iterator& operator++(int) {Legion::PointInDomainIterator<DIM>::step(); return *this; }
-    const Legion::Point<DIM>& operator*(void) { return Legion::PointInDomainIterator<DIM>::operator*(); }
+    const Legion::Point<DIM>& operator*(void) const { return Legion::PointInDomainIterator<DIM>::operator*(); }
+    bool operator!=(const iterator& other) const
+    {
+      const Legion::Point<DIM> my_pt = operator*();
+      const Legion::Point<DIM> other_pt = other.operator*();
+      return (my_pt != other_pt);
+    }
   };
+  
+  iterator begin()
+  {
+    return iterator(*this);
+  }
+  
+  iterator end()
+  {
+    if (end_itr != NULL) {
+      return *end_itr;
+    }
+    iterator itr(*this);
+    iterator *itr_prev = new iterator();
+    while(itr() == true) {
+      *itr_prev = itr;
+      itr++;
+    }
+    end_itr = itr_prev;
+    return *itr_prev;
+  }
+  
+private:
+  iterator *end_itr;
   
 private:  
   void init_parameters()
@@ -507,6 +539,7 @@ private:
     region = NULL;
     partition = NULL;
     ctx = NULL;
+    end_itr = NULL;
     is_pr_mapped = PR_NOT_MAPPED;
     task_field_vector.clear();
     accessor_map.clear();

@@ -7,11 +7,18 @@ enum FieldIDs {
 };
 
 void init_value(context c, WD_Region<2> region_xy){
+  
+  for(auto pir : region_xy) {
+    float value = 2;
+    region_xy.write<float>(FID_X, pir, value);
+    region_xy.write<float>(FID_Y, pir, value);
+  }
+  /*
   for (WD_Region<2>::iterator pir(region_xy); pir(); pir++) {
     float value = 2;
     region_xy.write<float>(FID_X, *pir, value);
     region_xy.write<float>(FID_Y, *pir, value);
-  }
+  }*/
 }
 
 void print_value(context c, RO_Region<2> region_xy){
