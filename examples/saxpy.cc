@@ -9,7 +9,10 @@ enum FieldIDs {
 
 void saxpy(context c, float alpha, RO_Region<1> region_xy, WD_Region<1> region_z){
   
+  int i = 0;
   for(auto pir : region_xy) {
+    printf("i %d\n", i);
+    i++;
     float x = region_xy.read<float>(FID_X, pir);
     float y = region_xy.read<float>(FID_Y, pir);
     region_z.write<float>(FID_Z, pir, x * alpha + y);
@@ -60,11 +63,11 @@ void top_level(context c)
   FdSpace input_fs(c);
   input_fs.add_field<float>(FID_X);
   input_fs.add_field<float>(FID_Y);
-  Region<1> input_lr(c, ispace, input_fs);
+  Region<1> input_lr(ispace, input_fs);
   
   FdSpace output_fs(c);
   output_fs.add_field<float>(FID_Z);
-  Region<1> output_lr(c, ispace, output_fs);
+  Region<1> output_lr(ispace, output_fs);
   
   std::vector<field_id_t> x_vec{FID_X};
   auto wd_x = WD_Region<1>(&input_lr, x_vec);

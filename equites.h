@@ -6,6 +6,7 @@
 #include <array>
 
 #include <iostream>
+#include <memory>
 
 #define PR_NOT_MAPPED     0
 #define PR_INLINE_MAPPED  1
@@ -83,14 +84,14 @@ public:
   const context &ctx;
   Legion::FieldSpace fs;
   Legion::FieldAllocator allocator;
-  std::vector<field_id_t> field_id_vector;
+  std::vector<field_id_t> field_id_vec;
 public:
  // FdSpace() {}
   FdSpace(const context& c) : ctx(c)
   {
     fs = c.runtime->create_field_space(c.ctx);
     allocator = c.runtime->create_field_allocator(c.ctx, fs);
-    field_id_vector.clear();
+    field_id_vec.clear();
   }
   
   ~FdSpace()
@@ -102,7 +103,7 @@ public:
   void add_field(field_id_t fid)
   {
     allocator.allocate_field(sizeof(T),fid);
-    field_id_vector.push_back(fid);
+    field_id_vec.push_back(fid);
   }
 };
 
@@ -113,20 +114,20 @@ template <size_t DIM>
 class Region {
 public:
   const context &ctx;
-  IdxSpace<DIM> &idx_space; // for partition
-  FdSpace &fd_space;
+  const IdxSpace<DIM> &idx_space; // for partition
+  const FdSpace &fd_space;
   Legion::LogicalRegion lr; 
   Legion::LogicalRegion lr_parent;
   std::map<int, Base_Region<DIM> *> inline_mapping_map;
 public:
   //Region() {}
-  Region(const context &c, IdxSpace<DIM> &ispace, FdSpace &fspace) : ctx(c), idx_space(ispace), fd_space(fspace)
+  Region(IdxSpace<DIM> &ispace, FdSpace &fspace) : ctx(ispace.ctx), idx_space(ispace), fd_space(fspace)
   {
-    lr = c.runtime->create_logical_region(c.ctx, ispace.is, fspace.fs);
+    lr = ctx.runtime->create_logical_region(ctx.ctx, ispace.is, fspace.fs);
     lr_parent = lr;
-    std::vector<field_id_t> &task_field_id_vec = fd_space.field_id_vector;
-    std::vector<field_id_t>::iterator it; 
-    for (it = task_field_id_vec.begin(); it != task_field_id_vec.end(); it++) {
+    const std::vector<field_id_t> &task_field_id_vec = fd_space.field_id_vec;
+    std::vector<field_id_t>::const_iterator it; 
+    for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        printf("init inline mapping map for fid %d\n", *it);
        Base_Region<DIM> *null_ptr = NULL;
        inline_mapping_map.insert(std::make_pair(*it, null_ptr)); 
@@ -174,21 +175,21 @@ template <size_t DIM>
 class Partition {
 public:
   const context &ctx;
-  Region<DIM> &region;
+  const Region<DIM> &region;
   Legion::IndexPartition ip;
   Legion::LogicalPartition lp;
 public:
 //  Partition() {}
-  Partition(const context &c, int p_type, Region<DIM> &r, IdxSpace<DIM> &ispace) : ctx(c), region(r)
+  Partition(int p_type, Region<DIM> &r, IdxSpace<DIM> &ispace) : ctx(r.ctx), region(r)
   {
-    ip = c.runtime->create_equal_partition(c.ctx, r.idx_space.is, ispace.is);
-    lp = c.runtime->get_logical_partition(c.ctx, r.lr, ip);
+    ip = ctx.runtime->create_equal_partition(ctx.ctx, r.idx_space.is, ispace.is);
+    lp = ctx.runtime->get_logical_partition(ctx.ctx, r.lr, ip);
   }
   
-  Partition(const context &c, int p_type, Region<DIM> &r, IdxSpace<DIM> &ispace, Legion::DomainTransform &dt, Rect<DIM> &rect) : ctx(c), region(r)
+  Partition(int p_type, Region<DIM> &r, IdxSpace<DIM> &ispace, Legion::DomainTransform &dt, Rect<DIM> &rect) : ctx(r.ctx), region(r)
   {
-    ip = c.runtime->create_partition_by_restriction(c.ctx, r.idx_space.is, ispace.is, dt, Legion::Domain::from_rect<DIM>(rect));
-    lp = c.runtime->get_logical_partition(c.ctx, r.lr, ip);
+    ip = ctx.runtime->create_partition_by_restriction(ctx.ctx, r.idx_space.is, ispace.is, dt, Legion::Domain::from_rect<DIM>(rect));
+    lp = ctx.runtime->get_logical_partition(ctx.ctx, r.lr, ip);
   }
   
   ~Partition()
@@ -310,30 +311,90 @@ public:
   }
 };
 
-template <size_t ndim>
-static Point<ndim> END(void) {
-  Point<ndim> z; for(size_t i=0; i < ndim; i++) z.x[i] = -1; return z; 
-}
+class Collectable {
+public:
+  Collectable(unsigned init = 0) : references(init) { }
+public:
+  inline void add_reference(unsigned cnt = 1)
+  {
+    __sync_add_and_fetch(&references,cnt);
+  }
+  inline bool remove_reference(unsigned cnt = 1)
+  {
+    unsigned prev = __sync_fetch_and_sub(&references,cnt);
+    return (prev == cnt);
+  }
+public:
+unsigned int references;
+};
 
+template <size_t DIM>
+class LogicalRegionImpl {
+public:
+  const Region<DIM> *region;
+  const Partition<DIM> *partition;
+public:
+  LogicalRegionImpl() : region(NULL), partition(NULL)
+  {
+  }
+  ~LogicalRegionImpl()
+  {
+    region = NULL;
+    partition = NULL;
+  }
+};
+
+class PhysicalRegionImpl {
+public:
+  int is_mapped;
+  Legion::PhysicalRegion physical_region;
+  std::map<field_id_t, unsigned char*> accessor_map;
+public:
+  PhysicalRegionImpl() : is_mapped(PR_NOT_MAPPED)
+  {
+    accessor_map.clear();
+  }
+};
 
 /* regions. */
 /* _region is an abstract class */
 template <size_t DIM>
-class Base_Region{
+class Base_Region {
 public:
   int is_pr_mapped;
   Legion::Domain domain;
-  Region<DIM> *region;
-  Partition<DIM> *partition;
+  const Region<DIM> *region;
+  const Partition<DIM> *partition;
   const context *ctx;
   Legion::PhysicalRegion physical_region;
   std::vector<field_id_t> task_field_vector;
   legion_privilege_mode_t pm; 
   std::map<field_id_t, unsigned char*> accessor_map;  
   
+  //std::shared_ptr<LogicalRegionImpl<DIM>> logical_region_impl;
+  LogicalRegionImpl<DIM> *logical_region_impl;
+  PhysicalRegionImpl *physical_region_impl;
+  
   const static legion_coherence_property_t cp = EXCLUSIVE; 
   
 public:
+  /*
+  Base_Region & operator=(const Base_Region & rhs)
+  {
+    if (logical_region_impl != NULL) {
+      if (logical_region_impl->remove_reference()) {
+        printf("THIS %p, remove reference copy%d\n", this, logical_region_impl->references);
+        delete logical_region_impl;
+      }
+    }
+    logical_region_impl = rhs.logical_region_impl;
+    if (logical_region_impl != NULL) {
+      logical_region_impl->add_reference();
+      printf("THIS %p, add reference %d\n", this, logical_region_impl->references);
+    }
+    return *this;
+  }*/
+  
   Base_Region()
   {
     init_parameters();
@@ -344,9 +405,11 @@ public:
   Base_Region(Region<DIM> *r, std::vector<field_id_t> &task_field_id_vec) 
   {
     init_parameters();
+    //logical_region_impl = std::make_shared<LogicalRegionImpl<DIM>>();
+    logical_region_impl = new LogicalRegionImpl<DIM>();
     region = r;
-    std::vector<field_id_t>::iterator it; 
-    for (it = task_field_id_vec.begin(); it != task_field_id_vec.end(); it++) {
+    std::vector<field_id_t>::const_iterator it; 
+    for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        printf("base set fid %d\n", *it);
        task_field_vector.push_back(*it); 
     }
@@ -358,11 +421,13 @@ public:
   Base_Region(Region<DIM> *r) 
   {
     init_parameters();
+   // logical_region_impl = std::make_shared<LogicalRegionImpl<DIM>>();
+    logical_region_impl = new LogicalRegionImpl<DIM>();
     region = r;
     ctx = &(region->ctx);
-    std::vector<field_id_t> &task_field_id_vec = this->region->fd_space.field_id_vector;
-    std::vector<field_id_t>::iterator it; 
-    for (it = task_field_id_vec.begin(); it != task_field_id_vec.end(); it++) {
+    const std::vector<field_id_t> &task_field_id_vec = this->region->fd_space.field_id_vec;
+    std::vector<field_id_t>::const_iterator it; 
+    for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        printf("base set fid %d\n", *it);
        task_field_vector.push_back(*it); 
     }
@@ -373,11 +438,13 @@ public:
   Base_Region(Partition<DIM> *par, std::vector<field_id_t> &task_field_id_vec)
   {
     init_parameters();
+   // logical_region_impl = std::make_shared<LogicalRegionImpl<DIM>>();
+    logical_region_impl = new LogicalRegionImpl<DIM>();
     partition = par;
     region = &(par->region);
     ctx = &(region->ctx);
-    std::vector<field_id_t>::iterator it; 
-    for (it = task_field_id_vec.begin(); it != task_field_id_vec.end(); it++) {
+    std::vector<field_id_t>::const_iterator it; 
+    for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        printf("base set fid %d\n", *it);
        task_field_vector.push_back(*it); 
     }
@@ -388,12 +455,14 @@ public:
   Base_Region(Partition<DIM> *par)
   {
     init_parameters();
+   // logical_region_impl = std::make_shared<LogicalRegionImpl<DIM>>();
+    logical_region_impl = new LogicalRegionImpl<DIM>();
     partition = par;
     region = &(par->region);
     ctx = &(region->ctx);
-    std::vector<field_id_t> &task_field_id_vec = this->region->fd_space.field_id_vector;
-    std::vector<field_id_t>::iterator it; 
-    for (it = task_field_id_vec.begin(); it != task_field_id_vec.end(); it++) {
+    const std::vector<field_id_t> &task_field_id_vec = this->region->fd_space.field_id_vec;
+    std::vector<field_id_t>::const_iterator it; 
+    for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        printf("base set fid %d\n", *it);
        task_field_vector.push_back(*it); 
     }
@@ -422,6 +491,20 @@ public:
     ctx = NULL;
     if (end_itr != NULL) delete end_itr;
     end_itr = NULL;
+
+    /*
+    if (logical_region_impl != NULL) {
+      printf("THIS %p, remove reference free%d\n", this, logical_region_impl->references);
+      if (logical_region_impl->remove_reference()) {
+        printf("$$$$$$$$$$free %p\n", logical_region_impl);
+        delete logical_region_impl;
+      }
+      logical_region_impl = NULL;
+    }*/
+    if (physical_region_impl != NULL) {
+      delete physical_region_impl;
+      logical_region_impl = NULL;
+    }
   //  printf("base de-constructor\n");
   }
   
@@ -540,6 +623,8 @@ private:
     partition = NULL;
     ctx = NULL;
     end_itr = NULL;
+    logical_region_impl = NULL;
+    physical_region_impl = NULL;
     is_pr_mapped = PR_NOT_MAPPED;
     task_field_vector.clear();
     accessor_map.clear();
@@ -842,6 +927,7 @@ template <size_t ndim, template <size_t> typename t>
 inline typename std::enable_if<!std::is_base_of<Base_Region<ndim>, t<ndim>>::value, int>::type
   bindPhysical(context &c, std::vector<Legion::PhysicalRegion> pr, std::vector<Legion::RegionRequirement> rr, size_t i, t<ndim> *r){ return i; }; 
 
+//TODO std::ref
 template <size_t ndim, template <size_t> typename t>
 inline typename std::enable_if<std::is_base_of<Base_Region<ndim>, t<ndim>>::value, int>::type
 bindPhysical(context &c, std::vector<Legion::PhysicalRegion> pr, std::vector<Legion::RegionRequirement> rr, size_t i, t<ndim> *r){
