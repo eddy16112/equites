@@ -56,14 +56,14 @@ void top_level(context c)
   FdSpace input_fs(c);
   input_fs.add_field<float>(FID_X);
   input_fs.add_field<float>(FID_Y);
-  Region<1> input_lr(c, ispace, input_fs);
+  Region<1> input_lr(ispace, input_fs);
   
   FdSpace output_fs(c);
   output_fs.add_field<float>(FID_Z);
-  Region<1> output_lr(c, ispace, output_fs);
+  Region<1> output_lr(ispace, output_fs);
   
-  Partition<1> input_lp(c, equal, input_lr, color_is);
-  Partition<1> output_lp(c, equal, output_lr, color_is);
+  Partition<1> input_lp(equal, input_lr, color_is);
+  Partition<1> output_lp(equal, output_lr, color_is);
   
   std::vector<field_id_t> x_vec{FID_X};
   auto wd_x = WD_Region<1>(&input_lp, x_vec);

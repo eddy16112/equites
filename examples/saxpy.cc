@@ -60,16 +60,16 @@ void top_level(context c)
   FdSpace input_fs(c);
   input_fs.add_field<float>(FID_X);
   input_fs.add_field<float>(FID_Y);
-  Region<1> input_lr(c, ispace, input_fs);
+  Region<1> input_lr(ispace, input_fs);
   
   FdSpace output_fs(c);
   output_fs.add_field<float>(FID_Z);
-  Region<1> output_lr(c, ispace, output_fs);
+  Region<1> output_lr(ispace, output_fs);
   
   std::vector<field_id_t> x_vec{FID_X};
   auto wd_x = WD_Region<1>(&input_lr, x_vec);
   runtime.execute_task(init_value, c, wd_x);
-  
+  /*
   std::vector<field_id_t> y_vec{FID_Y};
   auto wd_y = WD_Region<1>(&input_lr, y_vec);
   runtime.execute_task(init_value, c, wd_y);
@@ -82,7 +82,7 @@ void top_level(context c)
   auto ro_xy = RO_Region<1>(&input_lr);
   auto ro_z = RO_Region<1>(&output_lr);
   runtime.execute_task(check, c, ro_xy, ro_z);
-  
+  */
  // call((print<float,1>), r);
 }
 

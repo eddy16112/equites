@@ -83,14 +83,14 @@ public:
   const context &ctx;
   Legion::FieldSpace fs;
   Legion::FieldAllocator allocator;
-  std::vector<field_id_t> field_id_vector;
+  std::vector<field_id_t> field_id_vec;
 public:
  // FdSpace() {}
   FdSpace(const context& c) : ctx(c)
   {
     fs = c.runtime->create_field_space(c.ctx);
     allocator = c.runtime->create_field_allocator(c.ctx, fs);
-    field_id_vector.clear();
+    field_id_vec.clear();
   }
   
   ~FdSpace()
@@ -102,7 +102,7 @@ public:
   void add_field(field_id_t fid)
   {
     allocator.allocate_field(sizeof(T),fid);
-    field_id_vector.push_back(fid);
+    field_id_vec.push_back(fid);
   }
 };
 
@@ -113,20 +113,20 @@ template <size_t DIM>
 class Region {
 public:
   const context &ctx;
-  IdxSpace<DIM> &idx_space; // for partition
-  FdSpace &fd_space;
+  const IdxSpace<DIM> &idx_space; // for partition
+  const FdSpace &fd_space;
   Legion::LogicalRegion lr; 
   Legion::LogicalRegion lr_parent;
   std::map<int, Base_Region<DIM> *> inline_mapping_map;
 public:
   //Region() {}
-  Region(const context &c, IdxSpace<DIM> &ispace, FdSpace &fspace) : ctx(c), idx_space(ispace), fd_space(fspace)
+  Region(IdxSpace<DIM> &ispace, FdSpace &fspace) : ctx(ispace.ctx), idx_space(ispace), fd_space(fspace)
   {
-    lr = c.runtime->create_logical_region(c.ctx, ispace.is, fspace.fs);
+    lr = ctx.runtime->create_logical_region(ctx.ctx, ispace.is, fspace.fs);
     lr_parent = lr;
-    std::vector<field_id_t> &task_field_id_vec = fd_space.field_id_vector;
-    std::vector<field_id_t>::iterator it; 
-    for (it = task_field_id_vec.begin(); it != task_field_id_vec.end(); it++) {
+    const std::vector<field_id_t> &task_field_id_vec = fd_space.field_id_vec;
+    std::vector<field_id_t>::const_iterator it; 
+    for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        printf("init inline mapping map for fid %d\n", *it);
        Base_Region<DIM> *null_ptr = NULL;
        inline_mapping_map.insert(std::make_pair(*it, null_ptr)); 
@@ -174,21 +174,21 @@ template <size_t DIM>
 class Partition {
 public:
   const context &ctx;
-  Region<DIM> &region;
+  const Region<DIM> &region;
   Legion::IndexPartition ip;
   Legion::LogicalPartition lp;
 public:
 //  Partition() {}
-  Partition(const context &c, int p_type, Region<DIM> &r, IdxSpace<DIM> &ispace) : ctx(c), region(r)
+  Partition(int p_type, Region<DIM> &r, IdxSpace<DIM> &ispace) : ctx(r.ctx), region(r)
   {
-    ip = c.runtime->create_equal_partition(c.ctx, r.idx_space.is, ispace.is);
-    lp = c.runtime->get_logical_partition(c.ctx, r.lr, ip);
+    ip = ctx.runtime->create_equal_partition(ctx.ctx, r.idx_space.is, ispace.is);
+    lp = ctx.runtime->get_logical_partition(ctx.ctx, r.lr, ip);
   }
   
-  Partition(const context &c, int p_type, Region<DIM> &r, IdxSpace<DIM> &ispace, Legion::DomainTransform &dt, Rect<DIM> &rect) : ctx(c), region(r)
+  Partition(int p_type, Region<DIM> &r, IdxSpace<DIM> &ispace, Legion::DomainTransform &dt, Rect<DIM> &rect) : ctx(r.ctx), region(r)
   {
-    ip = c.runtime->create_partition_by_restriction(c.ctx, r.idx_space.is, ispace.is, dt, Legion::Domain::from_rect<DIM>(rect));
-    lp = c.runtime->get_logical_partition(c.ctx, r.lr, ip);
+    ip = ctx.runtime->create_partition_by_restriction(ctx.ctx, r.idx_space.is, ispace.is, dt, Legion::Domain::from_rect<DIM>(rect));
+    lp = ctx.runtime->get_logical_partition(ctx.ctx, r.lr, ip);
   }
   
   ~Partition()
@@ -310,99 +310,181 @@ public:
   }
 };
 
-template <size_t ndim>
-static Point<ndim> END(void) {
-  Point<ndim> z; for(size_t i=0; i < ndim; i++) z.x[i] = -1; return z; 
-}
+class Collectable {
+public:
+  Collectable(unsigned init = 0) : references(init) { }
+public:
+  inline void add_reference(unsigned cnt = 1)
+  {
+    __sync_add_and_fetch(&references,cnt);
+    //references +=cnt;
+  }
+  inline bool remove_reference(unsigned cnt = 1)
+  {
+    unsigned prev = __sync_fetch_and_sub(&references,cnt);
+    assert(prev >= cnt);
+    //unsigned prev = references;
+    //references-= cnt;
+    return (prev == cnt);
+  }
+public:
+unsigned int references;
+};
 
+template <size_t DIM>
+class BaseRegionImpl : public Collectable {
+public:
+  const Region<DIM> *region;
+  const Partition<DIM> *partition;
+  int is_mapped;
+  Legion::Domain domain;
+  Legion::PhysicalRegion physical_region;
+  std::vector<field_id_t> task_field_vector;
+  std::map<field_id_t, unsigned char*> accessor_map;
+public:
+  BaseRegionImpl() : Collectable(), region(NULL), partition(NULL), is_mapped(PR_NOT_MAPPED)
+  {
+    region = NULL;
+    partition = NULL;
+    is_mapped = PR_NOT_MAPPED;
+    task_field_vector.clear();
+    accessor_map.clear();
+    domain = Legion::Domain::NO_DOMAIN;
+  }
+  ~BaseRegionImpl()
+  {
+    printf("in delete\n");
+    region = NULL;
+    partition = NULL;
+  //  accessor_map.clear();
+  //  task_field_vector.clear();
+  }
+};
 
 /* regions. */
 /* _region is an abstract class */
 template <size_t DIM>
-class Base_Region{
+class Base_Region {
 public:
-  int is_pr_mapped;
-  Legion::Domain domain;
-  Region<DIM> *region;
-  Partition<DIM> *partition;
   const context *ctx;
-  Legion::PhysicalRegion physical_region;
-  std::vector<field_id_t> task_field_vector;
-  legion_privilege_mode_t pm; 
-  std::map<field_id_t, unsigned char*> accessor_map;  
   
+  BaseRegionImpl<DIM> *base_region_impl;
+  
+  legion_privilege_mode_t pm; 
   const static legion_coherence_property_t cp = EXCLUSIVE; 
   
 public:
+  Base_Region & operator=(const Base_Region & rhs)
+  {
+    assert(0); 
+    if (base_region_impl != NULL) {
+      if (base_region_impl->remove_reference()) {
+        printf("THIS %p, remove reference copy%d\n", this, base_region_impl->references);
+        delete base_region_impl;
+      }
+    }
+    base_region_impl = rhs.logical_region_impl;
+    if (base_region_impl != NULL) {
+      base_region_impl->add_reference();
+      printf("THIS %p, add reference %d\n", this, base_region_impl->references);
+    }
+    return *this;
+  }
+  
+  Base_Region(const Base_Region & rhs)
+  {
+    ctx = rhs.ctx;
+    pm = rhs.pm;
+    base_region_impl = rhs.base_region_impl;
+    end_itr = rhs.end_itr;
+
+    if (base_region_impl != NULL) {
+      base_region_impl->add_reference();
+      printf("copy this %p, rhs %p, base_Region_impl %p, ref %d\n", this, &rhs, base_region_impl, base_region_impl->references);
+    }
+  }
+  
   Base_Region()
   {
     init_parameters();
-    domain = Legion::Domain::NO_DOMAIN;
+    //domain = Legion::Domain::NO_DOMAIN;
     printf("base constructor\n");
   }; 
   
   Base_Region(Region<DIM> *r, std::vector<field_id_t> &task_field_id_vec) 
   {
     init_parameters();
-    region = r;
-    std::vector<field_id_t>::iterator it; 
-    for (it = task_field_id_vec.begin(); it != task_field_id_vec.end(); it++) {
+    base_region_impl = new BaseRegionImpl<DIM>();
+    printf("this %p, new base_region_impl %p\n", this, base_region_impl);
+    base_region_impl->add_reference();
+    base_region_impl->region = r;
+    std::vector<field_id_t>::const_iterator it; 
+    for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        printf("base set fid %d\n", *it);
-       task_field_vector.push_back(*it); 
+       base_region_impl->task_field_vector.push_back(*it); 
     }
-    ctx = &(region->ctx);
-    domain = Legion::Domain::from_rect<DIM>(region->idx_space.rect);
+    ctx = &(r->ctx);
+    base_region_impl->domain = Legion::Domain::from_rect<DIM>(r->idx_space.rect);
     printf("base constructor with r v\n");
   }
   
   Base_Region(Region<DIM> *r) 
   {
     init_parameters();
-    region = r;
-    ctx = &(region->ctx);
-    std::vector<field_id_t> &task_field_id_vec = this->region->fd_space.field_id_vector;
-    std::vector<field_id_t>::iterator it; 
-    for (it = task_field_id_vec.begin(); it != task_field_id_vec.end(); it++) {
+    base_region_impl = new BaseRegionImpl<DIM>();
+    base_region_impl->add_reference();
+    printf("this %p, new base_region_impl %p\n", this, base_region_impl);
+    base_region_impl->region = r;
+    ctx = &(r->ctx);
+    const std::vector<field_id_t> &task_field_id_vec = base_region_impl->region->fd_space.field_id_vec;
+    std::vector<field_id_t>::const_iterator it; 
+    for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        printf("base set fid %d\n", *it);
-       task_field_vector.push_back(*it); 
+       base_region_impl->task_field_vector.push_back(*it); 
     }
-    domain = Legion::Domain::from_rect<DIM>(region->idx_space.rect);
+    base_region_impl->domain = Legion::Domain::from_rect<DIM>(r->idx_space.rect);
     printf("base constructor with r\n");
   }
   
   Base_Region(Partition<DIM> *par, std::vector<field_id_t> &task_field_id_vec)
   {
     init_parameters();
-    partition = par;
-    region = &(par->region);
-    ctx = &(region->ctx);
-    std::vector<field_id_t>::iterator it; 
-    for (it = task_field_id_vec.begin(); it != task_field_id_vec.end(); it++) {
+    base_region_impl = new BaseRegionImpl<DIM>();
+    printf("this %p, new base_region_impl %p\n", this, base_region_impl);
+    base_region_impl->add_reference();
+    base_region_impl->partition = par;
+    base_region_impl->region = &(par->region);
+    ctx = &(base_region_impl->region->ctx);
+    std::vector<field_id_t>::const_iterator it; 
+    for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        printf("base set fid %d\n", *it);
-       task_field_vector.push_back(*it); 
+       base_region_impl->task_field_vector.push_back(*it); 
     }
-    domain = Legion::Domain::from_rect<DIM>(region->idx_space.rect);
+    base_region_impl->domain = Legion::Domain::from_rect<DIM>(base_region_impl->region->idx_space.rect);
     printf("base constructor with p v\n");
   }
   
   Base_Region(Partition<DIM> *par)
   {
     init_parameters();
-    partition = par;
-    region = &(par->region);
-    ctx = &(region->ctx);
-    std::vector<field_id_t> &task_field_id_vec = this->region->fd_space.field_id_vector;
-    std::vector<field_id_t>::iterator it; 
-    for (it = task_field_id_vec.begin(); it != task_field_id_vec.end(); it++) {
+    base_region_impl = new BaseRegionImpl<DIM>();
+    base_region_impl->add_reference();
+    base_region_impl->partition = par;
+    base_region_impl->region = &(par->region);
+    ctx = &(base_region_impl->region->ctx);
+    const std::vector<field_id_t> &task_field_id_vec = base_region_impl->region->fd_space.field_id_vec;
+    std::vector<field_id_t>::const_iterator it; 
+    for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        printf("base set fid %d\n", *it);
-       task_field_vector.push_back(*it); 
+       base_region_impl->task_field_vector.push_back(*it); 
     }
-    domain = Legion::Domain::from_rect<DIM>(region->idx_space.rect);
+    base_region_impl->domain = Legion::Domain::from_rect<DIM>(base_region_impl->region->idx_space.rect);
     printf("base constructor with p\n");
   }
   
   ~Base_Region()
   {
+    /*
     if (is_pr_mapped == PR_INLINE_MAPPED) {
       unmap_physical_region_inline();
     }
@@ -414,22 +496,33 @@ public:
         delete it->second;
         it->second = NULL;
       }
-    }
-    task_field_vector.clear();
-    accessor_map.clear();
-    region = NULL;
-    partition = NULL;
+    }*/
+
     ctx = NULL;
-    if (end_itr != NULL) delete end_itr;
+//    if (end_itr != NULL) delete end_itr;
     end_itr = NULL;
+ /*   
+    if (logical_region_impl != NULL) {
+      printf("free %p\n", logical_region_impl);
+      delete logical_region_impl;
+      logical_region_impl = NULL;
+    }*/
+    if (base_region_impl != NULL) {
+      printf("THIS %p, impl %p, remove reference free%d\n", this, base_region_impl, base_region_impl->references);
+      if (base_region_impl->remove_reference()) {
+        printf("$$$$$$$$$$free THIS %p, %p\n", this, base_region_impl);
+        delete base_region_impl;
+      }
+      base_region_impl = NULL;
+    }
   //  printf("base de-constructor\n");
   }
   
   Legion::RegionRequirement set_region_requirement_single()
   {
-    Legion::RegionRequirement req(region->lr, pm, cp, region->lr_parent);
+    Legion::RegionRequirement req(base_region_impl->region->lr, pm, cp, base_region_impl->region->lr_parent);
     std::vector<field_id_t>::iterator it; 
-    for (it = task_field_vector.begin(); it < task_field_vector.end(); it++) {
+    for (it = base_region_impl->task_field_vector.begin(); it < base_region_impl->task_field_vector.end(); it++) {
       printf("base set RR fid %d\n", *it);
       req.add_field(*it); 
     }
@@ -438,9 +531,9 @@ public:
   
   Legion::RegionRequirement set_region_requirement_index()
   {
-    Legion::RegionRequirement req(partition->lp, 0, pm, cp, region->lr);
+    Legion::RegionRequirement req(base_region_impl->partition->lp, 0, pm, cp, base_region_impl->region->lr);
     std::vector<field_id_t>::iterator it; 
-    for (it = task_field_vector.begin(); it < task_field_vector.end(); it++) {
+    for (it = base_region_impl->task_field_vector.begin(); it < base_region_impl->task_field_vector.end(); it++) {
       printf("index base set RR fid %d\n", *it);
       req.add_field(*it); 
     }
@@ -450,21 +543,25 @@ public:
   void map_physical_region(context &c, Legion::PhysicalRegion &pr, Legion::RegionRequirement &rr)
   {
     init_parameters();
-    physical_region = pr;
+    base_region_impl = new BaseRegionImpl<DIM>();
+    printf("this %p, new base_region_impl %p\n", this, base_region_impl);
+    base_region_impl->add_reference();
+    base_region_impl->physical_region = pr;
     std::set<field_id_t>::iterator it;
     for (it = rr.privilege_fields.begin(); it != rr.privilege_fields.end(); it++) {
-      task_field_vector.push_back(*it);
+      base_region_impl->task_field_vector.push_back(*it);
       printf("map_physical_region rr field %d, set acc \n", *it);
       unsigned char *null_ptr = NULL;
-      accessor_map.insert(std::make_pair(*it, null_ptr)); 
+      base_region_impl->accessor_map.insert(std::make_pair(*it, null_ptr)); 
     }
-   // ctx = &c;
-    domain = c.runtime->get_index_space_domain(c.ctx, rr.region.get_index_space());
-    is_pr_mapped = PR_TASK_MAPPED;
+    ctx = &c;
+    base_region_impl->domain = c.runtime->get_index_space_domain(c.ctx, rr.region.get_index_space());
+    base_region_impl->is_mapped = PR_TASK_MAPPED;
   }
   
   void map_physical_region_inline()
   {
+#if 0
     if (is_pr_mapped != PR_NOT_MAPPED) {
       return;
     }
@@ -482,22 +579,33 @@ public:
     physical_region = ctx->runtime->map_region(ctx->ctx, req);
     //domain = c.runtime->get_index_space_domain(c.ctx, req.region.get_index_space());
     is_pr_mapped = PR_INLINE_MAPPED;
+  #endif
   }
   
   void unmap_physical_region_inline()
   {
+#if 0
     if (is_pr_mapped == PR_INLINE_MAPPED) {
       assert(ctx != NULL);
       ctx->runtime->unmap_region(ctx->ctx, physical_region);
       is_pr_mapped = PR_NOT_MAPPED;
       printf("base unmap region\n");
     }
+    #endif
+  }
+  
+  void cleanup_reference()
+  {
+    if (base_region_impl != NULL) {
+      base_region_impl->remove_reference();
+      base_region_impl = NULL;
+    }
   }
   
   class iterator: public Legion::PointInDomainIterator<DIM>{
     public: 
     iterator() {}
-    explicit iterator(Base_Region &r) : Legion::PointInDomainIterator<DIM>(r.domain) {} 
+    explicit iterator(Base_Region &r) : Legion::PointInDomainIterator<DIM>(r.base_region_impl->domain) {} 
     bool operator()(void) {return Legion::PointInDomainIterator<DIM>::operator()();}
     iterator& operator++(void) {Legion::PointInDomainIterator<DIM>::step(); return *this; }
     iterator& operator++(int) {Legion::PointInDomainIterator<DIM>::step(); return *this; }
@@ -536,13 +644,9 @@ private:
 private:  
   void init_parameters()
   {
-    region = NULL;
-    partition = NULL;
     ctx = NULL;
     end_itr = NULL;
-    is_pr_mapped = PR_NOT_MAPPED;
-    task_field_vector.clear();
-    accessor_map.clear();
+    base_region_impl = NULL;
   } 
 };
 
@@ -554,7 +658,7 @@ public:
   template< typename a>
   a read(int fid, Legion::Point<DIM> i)
   {
-    assert(this->is_pr_mapped != PR_NOT_MAPPED);
+    assert(this->base_region_impl->is_mapped != PR_NOT_MAPPED);
     Legion::FieldAccessor<READ_ONLY, a, DIM> *acc = get_accessor_by_fid<a>(fid);
     return (*acc)[i];
   };
@@ -562,7 +666,7 @@ public:
   template< typename a>
   a read(Legion::Point<DIM> i)
   {
-    assert(this->is_pr_mapped != PR_NOT_MAPPED);
+    assert(this->base_region_impl->is_mapped != PR_NOT_MAPPED);
     Legion::FieldAccessor<READ_ONLY, a, DIM> *acc = get_default_accessor<a>();
     return (*acc)[i];
   };
@@ -605,11 +709,11 @@ private:
   template< typename a>
   Legion::FieldAccessor<READ_ONLY, a, DIM>* get_accessor_by_fid(field_id_t fid)
   {
-    typename std::map<field_id_t, unsigned char*>::iterator it = this->accessor_map.find(fid);
-    if (it != this->accessor_map.end()) {
+    typename std::map<field_id_t, unsigned char*>::iterator it = this->base_region_impl->accessor_map.find(fid);
+    if (it != this->base_region_impl->accessor_map.end()) {
       if (it->second == NULL) {
         printf("first time create accessor for fid %d\n", fid);
-        Legion::FieldAccessor<READ_ONLY, a, DIM> *acc = new Legion::FieldAccessor<READ_ONLY, a, DIM>(this->physical_region, fid);
+        Legion::FieldAccessor<READ_ONLY, a, DIM> *acc = new Legion::FieldAccessor<READ_ONLY, a, DIM>(this->base_region_impl->physical_region, fid);
         it->second = (unsigned char*)acc;
       }
       return (Legion::FieldAccessor<READ_ONLY, a, DIM>*)(it->second);
@@ -623,8 +727,8 @@ private:
   template< typename a>
   Legion::FieldAccessor<READ_ONLY, a, DIM>* get_default_accessor()
   {
-    assert(this->task_field_vector.size() == 1);
-    return get_accessor_by_fid<a>(this->task_field_vector[0]);
+    assert(this->base_region_impl->task_field_vector.size() == 1);
+    return get_accessor_by_fid<a>(this->base_region_impl->task_field_vector[0]);
   }
 };
 
@@ -636,7 +740,7 @@ public:
   template< typename a>
   void write(int fid, Legion::Point<DIM> i, a x)
   {
-    assert(this->is_pr_mapped != PR_NOT_MAPPED);
+    assert(this->base_region_impl->is_mapped != PR_NOT_MAPPED);
     Legion::FieldAccessor<WRITE_DISCARD, a, DIM> *acc = get_accessor_by_fid<a>(fid);
     (*acc)[i] = x; 
   }
@@ -644,7 +748,7 @@ public:
   template< typename a>
   void write(Legion::Point<DIM> i, a x)
   {
-    assert(this->is_pr_mapped != PR_NOT_MAPPED);
+    assert(this->base_region_impl->is_mapped != PR_NOT_MAPPED);
     Legion::FieldAccessor<WRITE_DISCARD, a, DIM> *acc = get_default_accessor<a>();
     (*acc)[i] = x; 
   }
@@ -687,11 +791,11 @@ private:
   template< typename a>
   Legion::FieldAccessor<WRITE_DISCARD, a, DIM>* get_accessor_by_fid(field_id_t fid)
   {
-    typename std::map<field_id_t, unsigned char*>::iterator it = this->accessor_map.find(fid);
-    if (it != this->accessor_map.end()) {
+    typename std::map<field_id_t, unsigned char*>::iterator it = this->base_region_impl->accessor_map.find(fid);
+    if (it != this->base_region_impl->accessor_map.end()) {
       if (it->second == NULL) {
         printf("first time create accessor for fid %d\n", fid);
-        Legion::FieldAccessor<WRITE_DISCARD, a, DIM> *acc = new Legion::FieldAccessor<WRITE_DISCARD, a, DIM>(this->physical_region, fid);
+        Legion::FieldAccessor<WRITE_DISCARD, a, DIM> *acc = new Legion::FieldAccessor<WRITE_DISCARD, a, DIM>(this->base_region_impl->physical_region, fid);
         it->second = (unsigned char*)acc;
       }
       return (Legion::FieldAccessor<WRITE_DISCARD, a, DIM>*)(it->second);
@@ -705,8 +809,8 @@ private:
   template< typename a>
   Legion::FieldAccessor<WRITE_DISCARD, a, DIM>* get_default_accessor()
   {
-    assert(this->task_field_vector.size() == 1);
-    return get_accessor_by_fid<a>(this->task_field_vector[0]);
+    assert(this->base_region_impl->task_field_vector.size() == 1);
+    return get_accessor_by_fid<a>(this->base_region_impl->task_field_vector[0]);
   } 
 };
 
@@ -717,7 +821,7 @@ public:
   template< typename a>
   a read(int fid, Legion::Point<DIM> i)
   {
-    assert(this->is_pr_mapped != PR_NOT_MAPPED);
+    assert(this->base_region_impl->is_mapped != PR_NOT_MAPPED);
     Legion::FieldAccessor<READ_WRITE, a, DIM> *acc = get_accessor_by_fid<a>(fid);
     return (*acc)[i];
   };
@@ -725,7 +829,7 @@ public:
   template< typename a>
   a read(Legion::Point<DIM> i)
   {
-    assert(this->is_pr_mapped != PR_NOT_MAPPED);
+    assert(this->base_region_impl->is_mapped != PR_NOT_MAPPED);
     Legion::FieldAccessor<READ_WRITE, a, DIM> *acc = get_default_accessor<a>();
     return (*acc)[i];
   };
@@ -733,7 +837,7 @@ public:
   template< typename a>
   void write(int fid, Legion::Point<DIM> i, a x)
   {
-    assert(this->is_pr_mapped != PR_NOT_MAPPED);
+    assert(this->base_region_impl->is_mapped != PR_NOT_MAPPED);
     Legion::FieldAccessor<READ_WRITE, a, DIM> *acc = get_accessor_by_fid<a>(fid);
     (*acc)[i] = x; 
   }
@@ -741,7 +845,7 @@ public:
   template< typename a>
   void write(Legion::Point<DIM> i, a x)
   {
-    assert(this->is_pr_mapped != PR_NOT_MAPPED);
+    assert(this->base_region_impl->is_mapped != PR_NOT_MAPPED);
     Legion::FieldAccessor<READ_WRITE, a, DIM> *acc = get_default_accessor<a>();
     (*acc)[i] = x; 
   }
@@ -784,11 +888,11 @@ private:
   template< typename a>
   Legion::FieldAccessor<READ_WRITE, a, DIM>* get_accessor_by_fid(field_id_t fid)
   {
-    typename std::map<field_id_t, unsigned char*>::iterator it = this->accessor_map.find(fid);
-    if (it != this->accessor_map.end()) {
+    typename std::map<field_id_t, unsigned char*>::iterator it = this->base_region_impl->accessor_map.find(fid);
+    if (it != this->base_region_impl->accessor_map.end()) {
       if (it->second == NULL) {
         printf("first time create accessor for fid %d\n", fid);
-        Legion::FieldAccessor<READ_WRITE, a, DIM> *acc = new Legion::FieldAccessor<READ_WRITE, a, DIM>(this->physical_region, fid);
+        Legion::FieldAccessor<READ_WRITE, a, DIM> *acc = new Legion::FieldAccessor<READ_WRITE, a, DIM>(this->base_region_impl->physical_region, fid);
         it->second = (unsigned char*)acc;
       }
       return (Legion::FieldAccessor<READ_WRITE, a, DIM>*)(it->second);
@@ -802,8 +906,8 @@ private:
   template< typename a>
   Legion::FieldAccessor<READ_WRITE, a, DIM>* get_default_accessor()
   {
-    assert(this->task_field_vector.size() == 1);
-    return get_accessor_by_fid<a>(this->task_field_vector[0]);
+    assert(this->base_region_impl->task_field_vector.size() == 1);
+    return get_accessor_by_fid<a>(this->base_region_impl->task_field_vector[0]);
   }
 };
 
@@ -842,6 +946,7 @@ template <size_t ndim, template <size_t> typename t>
 inline typename std::enable_if<!std::is_base_of<Base_Region<ndim>, t<ndim>>::value, int>::type
   bindPhysical(context &c, std::vector<Legion::PhysicalRegion> pr, std::vector<Legion::RegionRequirement> rr, size_t i, t<ndim> *r){ return i; }; 
 
+//TODO std::ref
 template <size_t ndim, template <size_t> typename t>
 inline typename std::enable_if<std::is_base_of<Base_Region<ndim>, t<ndim>>::value, int>::type
 bindPhysical(context &c, std::vector<Legion::PhysicalRegion> pr, std::vector<Legion::RegionRequirement> rr, size_t i, t<ndim> *r){
@@ -871,6 +976,32 @@ mkLegionTask(const Legion::Task *task, const std::vector<Legion::PhysicalRegion>
   size_t i = 0; 
   bindPs(c, pr, task->regions, i, &at); 
   return apply(f, std::tuple_cat(std::make_tuple(c), at));
+}
+
+// Process region requirements for function calls
+template <typename t> 
+inline void regionCleanUpInternal(t &r){ }; 
+
+template <size_t ndim, template <size_t> typename t>
+inline typename std::enable_if<!std::is_base_of<Base_Region<ndim>, t<ndim>>::value, void>::type
+regionCleanUpInternal(t<ndim> &r){ }; 
+
+template <size_t ndim, template <size_t> typename t>
+inline typename std::enable_if<std::is_base_of<Base_Region<ndim>, t<ndim>>::value, void>::type
+regionCleanUpInternal(t<ndim> &r){
+  r.cleanup_reference();  
+  //printf("registered region\n"); 
+};
+
+template<size_t I = 0, typename... Tp>
+inline typename std::enable_if<I == sizeof...(Tp), void>::type
+regionCleanUp(std::tuple<Tp...> &t) {}
+
+template<size_t I = 0, typename... Tp>
+inline typename std::enable_if<I < sizeof...(Tp), void>::type 
+regionCleanUp(std::tuple<Tp...> &t)  {
+  regionCleanUpInternal(std::get<I>(t));
+  regionCleanUp<I+1>(t);  
 }
 
 // Process region requirements for function calls
@@ -970,7 +1101,9 @@ public:
   {
     typedef typename function_traits<F>::args argtuple;
     argtuple p = std::make_tuple(a...);
-    Legion::TaskLauncher task_launcher(id, Legion::TaskArgument(&p, sizeof(p))); 
+    argtuple p2 = std::make_tuple(a...);
+    regionCleanUp(p2);
+    Legion::TaskLauncher task_launcher(id, Legion::TaskArgument(&p2, sizeof(p2))); 
     regionArgReqs(task_launcher, p);  
     return Future(c.runtime->execute_task(c.ctx, task_launcher));
   }
@@ -979,8 +1112,10 @@ public:
   FutureMap launch_index_task(F f, context &c, IdxSpace<DIM> &ispace, Args... a){
     typedef typename function_traits<F>::args argtuple;
     argtuple p = std::make_tuple(a...);
+    argtuple p2 = std::make_tuple(a...);
+    regionCleanUp(p2);
     Legion::ArgumentMap arg_map; 
-    Legion::IndexLauncher index_launcher(id, ispace.is, Legion::TaskArgument(&p, sizeof(p)), arg_map); 
+    Legion::IndexLauncher index_launcher(id, ispace.is, Legion::TaskArgument(&p2, sizeof(p2)), arg_map); 
     regionArgReqsIndex(index_launcher, p);  
     return FutureMap(c.runtime->execute_index_space(c.ctx, index_launcher));
   }
@@ -989,7 +1124,9 @@ public:
   FutureMap launch_index_task(F f, context &c, IdxSpace<DIM> &ispace, ArgMap argmap, Args... a){
     typedef typename function_traits<F>::args argtuple;
     argtuple p = std::make_tuple(a...);
-    Legion::IndexLauncher index_launcher(id, ispace.is, Legion::TaskArgument(&p, sizeof(p)), argmap.arg_map); 
+    argtuple p2 = std::make_tuple(a...);
+    regionCleanUp(p2);
+    Legion::IndexLauncher index_launcher(id, ispace.is, Legion::TaskArgument(&p2, sizeof(p2)), argmap.arg_map); 
     regionArgReqsIndex(index_launcher, p);  
     return FutureMap(c.runtime->execute_index_space(c.ctx, index_launcher));
   }
