@@ -69,7 +69,7 @@ void top_level(context c)
   std::vector<field_id_t> x_vec{FID_X};
   auto wd_x = WD_Region<1>(&input_lr, x_vec);
   runtime.execute_task(init_value, c, wd_x);
-  /*
+  
   std::vector<field_id_t> y_vec{FID_Y};
   auto wd_y = WD_Region<1>(&input_lr, y_vec);
   runtime.execute_task(init_value, c, wd_y);
@@ -82,7 +82,7 @@ void top_level(context c)
   auto ro_xy = RO_Region<1>(&input_lr);
   auto ro_z = RO_Region<1>(&output_lr);
   runtime.execute_task(check, c, ro_xy, ro_z);
-  */
+  
  // call((print<float,1>), r);
 }
 
