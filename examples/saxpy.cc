@@ -9,7 +9,10 @@ enum FieldIDs {
 
 void saxpy(context c, float alpha, RO_Region<1> region_xy, WD_Region<1> region_z){
   
+  int i = 0;
   for(auto pir : region_xy) {
+    printf("i %d\n", i);
+    i++;
     float x = region_xy.read<float>(FID_X, pir);
     float y = region_xy.read<float>(FID_Y, pir);
     region_z.write<float>(FID_Z, pir, x * alpha + y);
