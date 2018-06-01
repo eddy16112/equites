@@ -1,4 +1,4 @@
-#include <equites.h>
+#include </home/wwu12/equites/equites.h>
 using namespace equites;
 
 enum FieldIDs {
@@ -21,7 +21,7 @@ void saxpy(context c, float alpha, RO_Region<1> region_xy, WD_Region<1> region_z
     float y = region_xy.read<float>(FID_Y, *pir);
     region_z.write<float>(FID_Z, *pir, x * alpha + y);
   }*/
-  printf("saxpy point %d\n", point);
+  printf("saxpy point %d, proc %llx\n", point, c.task->current_proc.id);
 }
 
 void init_value(context c, WD_Region<1> region_xy){

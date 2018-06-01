@@ -980,15 +980,15 @@ mkLegionTask(const Legion::Task *task, const std::vector<Legion::PhysicalRegion>
 
 // Process region requirements for function calls
 template <typename t> 
-inline void regionCleanUpInternal(t &r){ }; 
+inline void regionCleanUpPtr(t &r){ }; 
 
 template <size_t ndim, template <size_t> typename t>
 inline typename std::enable_if<!std::is_base_of<Base_Region<ndim>, t<ndim>>::value, void>::type
-regionCleanUpInternal(t<ndim> &r){ }; 
+regionCleanUpPtr(t<ndim> &r){ }; 
 
 template <size_t ndim, template <size_t> typename t>
 inline typename std::enable_if<std::is_base_of<Base_Region<ndim>, t<ndim>>::value, void>::type
-regionCleanUpInternal(t<ndim> &r){
+regionCleanUpPtr(t<ndim> &r){
   r.cleanup_reference();  
   //printf("registered region\n"); 
 };
@@ -1000,7 +1000,7 @@ regionCleanUp(std::tuple<Tp...> &t) {}
 template<size_t I = 0, typename... Tp>
 inline typename std::enable_if<I < sizeof...(Tp), void>::type 
 regionCleanUp(std::tuple<Tp...> &t)  {
-  regionCleanUpInternal(std::get<I>(t));
+  regionCleanUpPtr(std::get<I>(t));
   regionCleanUp<I+1>(t);  
 }
 
