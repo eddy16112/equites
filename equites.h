@@ -392,6 +392,14 @@ public:
     printf("base constructor\n");
   }; 
   
+  Base_Region(const Base_Region &rhs)
+  {
+    init_parameters();
+    this->ctx = rhs.ctx;
+    this->base_region_impl = rhs.base_region_impl;
+    this->pm = rhs.pm;
+  }
+  
   Base_Region(Region<DIM> *r, std::vector<field_id_t> &task_field_id_vec) 
   {
     init_parameters();
@@ -473,8 +481,11 @@ public:
     }*/
 
     ctx = nullptr;
-//    if (end_itr != NULL) delete end_itr;
-    end_itr = nullptr;
+    if (end_itr != nullptr) {
+      printf("delete end_itr %p\n", end_itr);
+      delete end_itr;
+      end_itr = nullptr;
+    }
  /*   
     if (logical_region_impl != NULL) {
       printf("free %p\n", logical_region_impl);
@@ -491,6 +502,14 @@ public:
       base_region_impl = NULL;
     }*/
   //  printf("base de-constructor\n");
+  }
+  
+  Base_Region & operator=(const Base_Region &rhs)
+  {
+    init_parameters();
+    this->ctx = rhs.ctx;
+    this->base_region_impl = rhs.base_region_impl;
+    this->pm = rhs.pm;
   }
   
   Legion::RegionRequirement set_region_requirement_single()
@@ -575,14 +594,17 @@ public:
     ctx = nullptr;
     end_itr = nullptr;
     if (base_region_impl != nullptr) {
-      printf("This %p, reset base_region_impl %p\n", this, base_region_impl.get());
+      auto tmp = base_region_impl;
+      printf("This %p, reset base_region_impl %p, count %d\n", this, base_region_impl.get(), base_region_impl.use_count());
       base_region_impl.reset();
+      //printf("This %p, reset tmp %p, count %d\n", this, tmp.get(), tmp.use_count());
       base_region_impl = nullptr;
+      printf("after nullptr %d\n", tmp.use_count());
     }
   }
   
   class iterator: public Legion::PointInDomainIterator<DIM>{
-    public: 
+  public: 
     iterator() {}
     explicit iterator(Base_Region &r) : Legion::PointInDomainIterator<DIM>(r.base_region_impl->domain) {} 
     bool operator()(void) {return Legion::PointInDomainIterator<DIM>::operator()();}
@@ -617,7 +639,7 @@ public:
     return *itr_prev;
   }
   
-private:
+public:
   iterator *end_itr;
   
 private:  
@@ -944,11 +966,11 @@ bindPhysical(context &c, std::vector<Legion::PhysicalRegion> pr, std::vector<Leg
 // Template size_t
 template<size_t I = 0, typename... Tp>
 inline typename std::enable_if<I == sizeof...(Tp), void>::type
-bindPs(context &c, std::vector<Legion::PhysicalRegion> pr, std::vector<Legion::RegionRequirement> rr, size_t i, std::tuple<Tp...> *) { }
+bindPs(context &c, const std::vector<Legion::PhysicalRegion> &pr, const std::vector<Legion::RegionRequirement> &rr, size_t i, std::tuple<Tp...> *) { }
 
 template<size_t I = 0, typename... Tp>
 inline typename std::enable_if<I < sizeof...(Tp), void>::type 
-bindPs(context &c, std::vector<Legion::PhysicalRegion> pr, std::vector<Legion::RegionRequirement> rr, size_t i, std::tuple<Tp...> *t){
+bindPs(context &c, const std::vector<Legion::PhysicalRegion> &pr, const std::vector<Legion::RegionRequirement> &rr, size_t i, std::tuple<Tp...> *t){
   bindPs<I+1>(c, pr, rr, bindPhysical(c, pr, rr, i, &std::get<I>(*t)), t); 
 };
 
@@ -1088,7 +1110,11 @@ public:
   {
     typedef typename function_traits<F>::args argtuple;
     argtuple p = std::make_tuple(a...);
+    //auto r = std::get<0>(p);
+    //printf("p1 count %ld\n", r.base_region_impl.use_count());
     argtuple p2 = std::make_tuple(a...);
+    //auto r2 = std::get<0>(p2);
+    //printf("p2 count %ld\n", r2.base_region_impl.use_count());
     regionCleanUp(p2);
     Legion::TaskLauncher task_launcher(id, Legion::TaskArgument(&p2, sizeof(p2))); 
     regionArgReqs(task_launcher, p);  

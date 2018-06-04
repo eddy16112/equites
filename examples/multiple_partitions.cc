@@ -52,7 +52,7 @@ void check_task(context c, int max_elements, RO_Region<1> region){
 void stencil_task(context c, int max_elements, RO_Region<1> region_val, RW_Region<1> region_deriv){
   printf("max_elements %d\n", max_elements);
   
-  Legion::Domain rect = region_deriv.domain;
+  Legion::Domain rect = region_deriv.base_region_impl->domain;
   int lo = rect.lo().get_point<1>();
   int hi = rect.hi().get_point<1>();
   if ((lo < 2) || (hi > (max_elements-3))) {
@@ -100,9 +100,9 @@ void top_level(context c)
   FdSpace fs(c);
   fs.add_field<double>(FID_VAL);
   fs.add_field<double>(FID_DERIV);
-  Region<1> stencil_lr(c, ispace, fs);
+  Region<1> stencil_lr(ispace, fs);
   
-  Partition<1> disjoint_lp(c, equal, stencil_lr, color_is);
+  Partition<1> disjoint_lp(equal, stencil_lr, color_is);
   
   const int block_size = (num_elements + num_subregions - 1) / num_subregions;
   
@@ -111,7 +111,7 @@ void top_level(context c)
   Rect<1> extent(-2, block_size + 1);
   
   Legion::DomainTransform d_transform(transform);
-  Partition<1> ghost_lp(c, restriction, stencil_lr, color_is, d_transform, extent);
+  Partition<1> ghost_lp(restriction, stencil_lr, color_is, d_transform, extent);
   
   std::vector<field_id_t> val_vec{FID_VAL};
   auto wd_val = WD_Region<1>(&disjoint_lp, val_vec);

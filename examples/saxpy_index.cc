@@ -50,7 +50,7 @@ void check(context c, RO_Region<1> region_xy, RO_Region<1> region_z){
 
 void top_level(context c)
 { 
-  IdxSpace<1> ispace(c, 12);
+  IdxSpace<1> ispace(c, 120);
   IdxSpace<1> color_is(c, 4);
   
   FdSpace input_fs(c);

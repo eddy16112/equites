@@ -34,6 +34,16 @@ void init_value(context c, WD_Region<1> region_xy){
     float value = 2;
     region_xy.write<float>(*pir, value);
   }
+  WD_Region<1> tmp = region_xy;
+  for(auto pir : region_xy) {
+    float value = 2;
+    region_xy.write<float>(pir, value);
+  }
+  for(auto pir : tmp) {
+    float value = 2;
+    tmp.write<float>(pir, value);
+  }
+  
 }
 
 void check(context c, RO_Region<1> region_xy, RO_Region<1> region_z){
@@ -68,8 +78,10 @@ void top_level(context c)
   
   std::vector<field_id_t> x_vec{FID_X};
   auto wd_x = WD_Region<1>(&input_lr, x_vec);
+  auto tmp = wd_x;
+  printf("count %ld, tmp count %d\n", wd_x.base_region_impl.use_count(), tmp.base_region_impl.use_count());
   runtime.execute_task(init_value, c, wd_x);
-  
+  /*
   std::vector<field_id_t> y_vec{FID_Y};
   auto wd_y = WD_Region<1>(&input_lr, y_vec);
   runtime.execute_task(init_value, c, wd_y);
@@ -82,7 +94,7 @@ void top_level(context c)
   auto ro_xy = RO_Region<1>(&input_lr);
   auto ro_z = RO_Region<1>(&output_lr);
   runtime.execute_task(check, c, ro_xy, ro_z);
-  
+ */ 
  // call((print<float,1>), r);
 }
 

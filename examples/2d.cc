@@ -44,7 +44,7 @@ void top_level(context c)
   FdSpace input_fs(c);
   input_fs.add_field<float>(FID_X);
   input_fs.add_field<float>(FID_Y);
-  Region<2> input_lr(c, ispace, input_fs);
+  Region<2> input_lr(ispace, input_fs);
   
   auto wd_xy = WD_Region<2>(&input_lr);
   runtime.execute_task(init_value, c, wd_xy);
