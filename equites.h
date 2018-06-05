@@ -481,11 +481,6 @@ public:
     }*/
 
     ctx = nullptr;
-    if (end_itr != nullptr) {
-      printf("delete end_itr %p\n", end_itr);
-      delete end_itr;
-      end_itr = nullptr;
-    }
  /*   
     if (logical_region_impl != NULL) {
       printf("free %p\n", logical_region_impl);
@@ -592,31 +587,49 @@ public:
   void cleanup_reference()
   {
     ctx = nullptr;
-    end_itr = nullptr;
     if (base_region_impl != nullptr) {
       auto tmp = base_region_impl;
-      printf("This %p, reset base_region_impl %p, count %d\n", this, base_region_impl.get(), base_region_impl.use_count());
+      printf("This %p, reset base_region_impl %p, count %ld\n", this, base_region_impl.get(), base_region_impl.use_count());
       base_region_impl.reset();
       //printf("This %p, reset tmp %p, count %d\n", this, tmp.get(), tmp.use_count());
       base_region_impl = nullptr;
-      printf("after nullptr %d\n", tmp.use_count());
+      printf("after nullptr %ld\n", tmp.use_count());
     }
   }
   
   class iterator: public Legion::PointInDomainIterator<DIM>{
   public: 
-    iterator() {}
-    explicit iterator(Base_Region &r) : Legion::PointInDomainIterator<DIM>(r.base_region_impl->domain) {} 
+    iterator(bool valid = true) : is_valid(valid) {}
+    explicit iterator(Base_Region &r) : Legion::PointInDomainIterator<DIM>(r.base_region_impl->domain), is_valid(true) {} 
     bool operator()(void) {return Legion::PointInDomainIterator<DIM>::operator()();}
-    iterator& operator++(void) {Legion::PointInDomainIterator<DIM>::step(); return *this; }
-    iterator& operator++(int) {Legion::PointInDomainIterator<DIM>::step(); return *this; }
+    iterator& operator++(void) 
+    {
+      Legion::PointInDomainIterator<DIM>::step(); 
+      if (!Legion::PointInDomainIterator<DIM>::valid()) {
+        this->is_valid = false;
+      }
+      return *this;
+    }
+    iterator& operator++(int) 
+    {
+      Legion::PointInDomainIterator<DIM>::step(); 
+      if (!Legion::PointInDomainIterator<DIM>::valid()) {
+        this->is_valid = false;
+      }
+      return *this; 
+    }
     const Legion::Point<DIM>& operator*(void) const { return Legion::PointInDomainIterator<DIM>::operator*(); }
     bool operator!=(const iterator& other) const
     {
+      if (is_valid == other.is_valid) {
+        return false;
+      }
       const Legion::Point<DIM> my_pt = operator*();
       const Legion::Point<DIM> other_pt = other.operator*();
       return (my_pt != other_pt);
     }
+  public:
+    bool is_valid;
   };
   
   iterator begin()
@@ -626,34 +639,19 @@ public:
   
   iterator end()
   {
-    if (end_itr != nullptr) {
-      return *end_itr;
-    }
-    iterator itr(*this);
-    iterator *itr_prev = new iterator();
-    while(itr() == true) {
-      *itr_prev = itr;
-      itr++;
-    }
-    end_itr = itr_prev;
-    return *itr_prev;
+    return iterator(false);
   }
-  
-public:
-  iterator *end_itr;
   
 private:  
   void init_parameters()
   {
     ctx = nullptr;
-    end_itr = nullptr;
     base_region_impl = nullptr;
   }
   
   void check_empty()
   {
     assert(ctx == nullptr);
-    assert(end_itr == nullptr);
     assert(base_region_impl == nullptr);
       
   } 

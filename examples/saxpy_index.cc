@@ -31,7 +31,7 @@ void init_value(context c, WD_Region<1> region_xy){
   }
 }
 
-void check(context c, RO_Region<1> region_xy, RO_Region<1> region_z){
+void check(context c, float alpha, RO_Region<1> region_xy, RO_Region<1> region_z){
   /*
   for(auto i : ab) {
     float z = c.read(i, FID_Z);
@@ -44,8 +44,12 @@ void check(context c, RO_Region<1> region_xy, RO_Region<1> region_z){
     float x = region_xy.read<float>(FID_X, *pir);
     float y = region_xy.read<float>(FID_Y, *pir);
     float z = region_z.read<float>(FID_Z, *pir);
-    printf("x %f, y %f, z %f\n", x, y, z);
+    //printf("x %f, y %f, z %f\n", x, y, z);
+    if (z != x * alpha + y) {
+      printf("error x %f, y %f, z %f\n", x, y, z);
+    }
   }
+  printf("Success\n");
 }
 
 void top_level(context c)
@@ -80,7 +84,7 @@ void top_level(context c)
   
   auto ro_xy_all = RO_Region<1>(&input_lr);
   auto ro_z_all = RO_Region<1>(&output_lr);
-  runtime.execute_task(check, c, ro_xy_all, ro_z_all);
+  runtime.execute_task(check, c, alpha, ro_xy_all, ro_z_all);
   
  // call((print<float,1>), r);
 }
