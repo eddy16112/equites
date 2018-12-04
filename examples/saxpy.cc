@@ -30,6 +30,7 @@ void saxpy(context c, float alpha, RO_Region<1> region_xy, WD_Region<1> region_z
 }
 
 void init_value(context c, WD_Region<1> region_xy){
+  /*
   for (WD_Region<1>::iterator pir(region_xy); pir(); pir++) {
     float value = 2;
     region_xy.write<float>(*pir, value);
@@ -43,29 +44,37 @@ void init_value(context c, WD_Region<1> region_xy){
     id ++;
     region_xy.write<float>(*pir, value);
   }
-  /*
-  for(auto pir : tmp) {
+  */
+  
+  for(auto pir : region_xy) {
     float value = 2;
-    tmp.write<float>(pir, value);
-  }*/
+    region_xy.write<float>(pir, value);
+  }
   
 }
 
-void check(context c, RO_Region<1> region_xy, RO_Region<1> region_z){
-  /*
-  for(auto i : ab) {
-    float z = c.read(i, FID_Z);
-    float x = ab.read(i, FID_X);
-    float y = ab.read(i, FID_Y);
-    printf("x %f, y %f, z %f\n", x, y, z);
-  } */
+void check(context c, float alpha, RO_Region<1> region_xy, RO_Region<1> region_z){
   
+  for(auto pir : region_xy) {
+    float x = region_xy.read<float>(FID_X, pir);
+    float y = region_xy.read<float>(FID_Y, pir);
+    float z = region_z.read<float>(FID_Z, pir);
+    if (z != x*alpha + y) {
+      printf("failed\n");
+    }
+  } 
+  printf("success!!!\n");
+  
+  
+  /*
   for (RW_Region<1>::iterator pir(region_xy); pir(); pir++) {
     float x = region_xy.read<float>(FID_X, *pir);
     float y = region_xy.read<float>(FID_Y, *pir);
     float z = region_z.read<float>(FID_Z, *pir);
     printf("x %f, y %f, z %f\n", x, y, z);
   }
+  */
+  
 }
 
 void top_level(context c)
@@ -98,7 +107,7 @@ void top_level(context c)
   
   auto ro_xy = RO_Region<1>(&input_lr);
   auto ro_z = RO_Region<1>(&output_lr);
-  runtime.execute_task(check, c, ro_xy, ro_z);
+  runtime.execute_task(check, c, alpha, ro_xy, ro_z);
  
  // call((print<float,1>), r);
 }
