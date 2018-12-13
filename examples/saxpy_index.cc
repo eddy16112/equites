@@ -1,5 +1,5 @@
-#include </home/wwu12/equites/equites.h>
-using namespace equites;
+#include <legion_simplified.h>
+using namespace LegionSimplified;
 
 enum FieldIDs {
   FID_X = 3,

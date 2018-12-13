@@ -1,3 +1,6 @@
+#ifndef _LEGION_SIMPLIFIED_H
+#define _LEGION_SIMPLIFIED_H
+
 #include <stdio.h>
 #include <legion.h>
 #include <functional>
@@ -12,7 +15,7 @@
 #define PR_INLINE_MAPPED  1
 #define PR_TASK_MAPPED    2
 
-namespace equites { 
+namespace LegionSimplified { 
   
 enum partition_type
 {
@@ -22,7 +25,7 @@ enum partition_type
 
 template <size_t ndim>  using Point = LegionRuntime::Arrays::Point<ndim>;  
 template <size_t ndim>  using Rect = LegionRuntime::Arrays::Rect<ndim>;  
-using LegionRuntime::Arrays::make_point;
+//using LegionRuntime::Arrays::make_point;
 
 typedef Legion::FieldID field_id_t;
 
@@ -50,62 +53,52 @@ inline Legion::Point<3> makepoint(coord_t x, coord_t y, coord_t z)
   return Legion::Point<3>(val);
 }
 
-/* Simple wrapper for all needed context passed to tasks */
-struct context {
-  const Legion::Task *task;
-  Legion::Context ctx;
-  Legion::Runtime *runtime;
-};
+  /**
+   * \struct context
+   * A wrapper for all needed context passed to tasks.
+   */
+  struct context {
+    const Legion::Task *task;
+    Legion::Context ctx;
+    Legion::Runtime *runtime;
+  };
 
+  /**
+   * \class IdxSpace
+   * A class for representing IndexSpace
+   */
+  template <size_t DIM>
+  class IdxSpace {
+  public:
+    const context &ctx;
+    Legion::IndexSpace is;
+    Rect<DIM> rect;
+  
+  public:  
+    IdxSpace(const context& c, Point<DIM> p);
+  
+    ~IdxSpace();
+  };
 
-template <size_t DIM>
-class IdxSpace {
-public:
-  const context &ctx;
-  Legion::IndexSpace is;
-  Rect<DIM> rect;
-public:
- // IdxSpace() {}
-  IdxSpace(const context& c, Point<DIM> p) : ctx(c)
-  {
-    rect = Rect<DIM>(Point<DIM>::ZEROES(), p-Point<DIM>::ONES());
-    std::cout << "ispace set rect to be from " << Point<DIM>::ZEROES() << " to " << rect.hi << std::endl; 
-    is = c.runtime->create_index_space(c.ctx, Legion::Domain::from_rect<DIM>(rect)); 
-  }
+  /**
+   * \class FdSpace
+   * A class for representing FieldSpace
+   */
+  class FdSpace {
+  public:
+    const context &ctx;
+    Legion::FieldSpace fs;
+    Legion::FieldAllocator allocator;
+    std::vector<field_id_t> field_id_vec;
   
-  ~IdxSpace()
-  {
-    ctx.runtime->destroy_index_space(ctx.ctx, is);
-  }
-};
-
-class FdSpace {
-public:
-  const context &ctx;
-  Legion::FieldSpace fs;
-  Legion::FieldAllocator allocator;
-  std::vector<field_id_t> field_id_vec;
-public:
- // FdSpace() {}
-  FdSpace(const context& c) : ctx(c)
-  {
-    fs = c.runtime->create_field_space(c.ctx);
-    allocator = c.runtime->create_field_allocator(c.ctx, fs);
-    field_id_vec.clear();
-  }
+  public:
+    FdSpace(const context& c);
   
-  ~FdSpace()
-  {
-    ctx.runtime->destroy_field_space(ctx.ctx, fs);
-  }
+    ~FdSpace();
   
-  template <typename T>
-  void add_field(field_id_t fid)
-  {
-    allocator.allocate_field(sizeof(T),fid);
-    field_id_vec.push_back(fid);
-  }
-};
+    template <typename T>
+    void add_field(field_id_t fid);
+  };
 
 template <size_t DIM>
 class Base_Region;
@@ -1076,72 +1069,75 @@ struct regTask<void, F, f> {
     Legion::Runtime::preregister_task_variant<mkLegionTask<F, f>>(r);
   }
 };
-/*
-class TaskBase {
-public:
-  template <typename ...Args>
-  virtual Future _call(context c, Args... a) = 0;
-};*/
 
-class UserTask {
-public:
-  static const UserTask NO_USER_TASK;
-  Legion::TaskID id;
-  std::string task_name;
+  /**
+   * \class UserTask
+   * A class for representing user defined tasks.
+   */
+  class UserTask {
+  public:
+    static const UserTask NO_USER_TASK;
+    Legion::TaskID id;
+    std::string task_name;
 
-public:
-  UserTask(const char* name="default") : task_name(name)
-  {
-    id = globalId++; // still not sure about this
-  }
-  template <typename F, F f>
-  void register_task()
-  {
-    typedef typename function_traits<F>::returnType RT; 
-    Legion::ProcessorConstraint pc = Legion::ProcessorConstraint(Legion::Processor::LOC_PROC);
-    Legion::TaskVariantRegistrar registrar(id, task_name.c_str());
-    registrar.add_constraint(pc);
-    regTask<RT, F, f>::variant(registrar); 
-  }
-  template <typename F, typename ...Args>
-  Future launch_single_task(F f, context &c, Args... a)
-  {
-    typedef typename function_traits<F>::args argtuple;
-    argtuple p = std::make_tuple(a...);
-    //auto r = std::get<0>(p);
-    //printf("p1 count %ld\n", r.base_region_impl.use_count());
-    argtuple p2 = std::make_tuple(a...);
-    //auto r2 = std::get<0>(p2);
-    //printf("p2 count %ld\n", r2.base_region_impl.use_count());
-    regionCleanUp(p2);
-    Legion::TaskLauncher task_launcher(id, Legion::TaskArgument(&p2, sizeof(p2))); 
-    regionArgReqs(task_launcher, p);  
-    return Future(c.runtime->execute_task(c.ctx, task_launcher));
-  }
+  public:
+    UserTask(const char* name);
+    
+    ~UserTask(void);
+    
+    // register task constraints
+    template <typename F, F f>
+    void register_task()
+    {
+      typedef typename function_traits<F>::returnType RT; 
+      Legion::ProcessorConstraint pc = Legion::ProcessorConstraint(Legion::Processor::LOC_PROC);
+      Legion::TaskVariantRegistrar registrar(id, task_name.c_str());
+      registrar.add_constraint(pc);
+      regTask<RT, F, f>::variant(registrar); 
+    }
+    
+    // launch single task
+    template <typename F, typename ...Args>
+    Future launch_single_task(F f, context &c, Args... a)
+    {
+      typedef typename function_traits<F>::args argtuple;
+      argtuple p = std::make_tuple(a...);
+      //auto r = std::get<0>(p);
+      //printf("p1 count %ld\n", r.base_region_impl.use_count());
+      argtuple p2 = std::make_tuple(a...);
+      //auto r2 = std::get<0>(p2);
+      //printf("p2 count %ld\n", r2.base_region_impl.use_count());
+      regionCleanUp(p2);
+      Legion::TaskLauncher task_launcher(id, Legion::TaskArgument(&p2, sizeof(p2))); 
+      regionArgReqs(task_launcher, p);  
+      return Future(c.runtime->execute_task(c.ctx, task_launcher));
+    }
+    
+    // launch index task  
+    template <size_t DIM, typename F, typename ...Args>
+    FutureMap launch_index_task(F f, context &c, IdxSpace<DIM> &ispace, Args... a){
+      typedef typename function_traits<F>::args argtuple;
+      argtuple p = std::make_tuple(a...);
+      argtuple p2 = std::make_tuple(a...);
+      regionCleanUp(p2);
+      Legion::ArgumentMap arg_map; 
+      Legion::IndexLauncher index_launcher(id, ispace.is, Legion::TaskArgument(&p2, sizeof(p2)), arg_map); 
+      regionArgReqsIndex(index_launcher, p);  
+      return FutureMap(c.runtime->execute_index_space(c.ctx, index_launcher));
+    }
   
-  template <size_t DIM, typename F, typename ...Args>
-  FutureMap launch_index_task(F f, context &c, IdxSpace<DIM> &ispace, Args... a){
-    typedef typename function_traits<F>::args argtuple;
-    argtuple p = std::make_tuple(a...);
-    argtuple p2 = std::make_tuple(a...);
-    regionCleanUp(p2);
-    Legion::ArgumentMap arg_map; 
-    Legion::IndexLauncher index_launcher(id, ispace.is, Legion::TaskArgument(&p2, sizeof(p2)), arg_map); 
-    regionArgReqsIndex(index_launcher, p);  
-    return FutureMap(c.runtime->execute_index_space(c.ctx, index_launcher));
-  }
-  
-  template <size_t DIM, typename F, typename ...Args>
-  FutureMap launch_index_task(F f, context &c, IdxSpace<DIM> &ispace, ArgMap argmap, Args... a){
-    typedef typename function_traits<F>::args argtuple;
-    argtuple p = std::make_tuple(a...);
-    argtuple p2 = std::make_tuple(a...);
-    regionCleanUp(p2);
-    Legion::IndexLauncher index_launcher(id, ispace.is, Legion::TaskArgument(&p2, sizeof(p2)), argmap.arg_map); 
-    regionArgReqsIndex(index_launcher, p);  
-    return FutureMap(c.runtime->execute_index_space(c.ctx, index_launcher));
-  }
-};
+    // launch index task with argmap
+    template <size_t DIM, typename F, typename ...Args>
+    FutureMap launch_index_task(F f, context &c, IdxSpace<DIM> &ispace, ArgMap argmap, Args... a){
+      typedef typename function_traits<F>::args argtuple;
+      argtuple p = std::make_tuple(a...);
+      argtuple p2 = std::make_tuple(a...);
+      regionCleanUp(p2);
+      Legion::IndexLauncher index_launcher(id, ispace.is, Legion::TaskArgument(&p2, sizeof(p2)), argmap.arg_map); 
+      regionArgReqsIndex(index_launcher, p);  
+      return FutureMap(c.runtime->execute_index_space(c.ctx, index_launcher));
+    }
+  };
 
 template <typename F, F f>
 class InternalTask {
@@ -1182,91 +1178,91 @@ public:
   */
 };
 
-
-class TaskRuntime
-{
-private:
-  std::map<uintptr_t, UserTask> user_task_map;
-  
-public:
-  TaskRuntime()
+  /**
+   * \class TaskRuntime
+   * A class for runtime.
+   */
+  class TaskRuntime
   {
+  private:
+    // a map to query tasks by function ptr
+    std::map<uintptr_t, UserTask> user_task_map;
+  
+  public:
+    TaskRuntime(void);
     
-  }
+    ~TaskRuntime(void);
   
-  template <typename F, F func_ptr>
-  void register_task(const char* name)
-  {
-    UserTask new_task(name);
-    new_task.register_task<F, func_ptr>();
-    user_task_map.insert(std::make_pair((uintptr_t)func_ptr, new_task)); 
-  }
-  
-  template <typename F>
-  int start(F func_ptr, int argc, char** argv)
-  { 
-    UserTask *t = get_user_task_obj((uintptr_t)func_ptr);
-    if (t != NULL) {
-      Legion::Runtime::set_top_level_task_id(t->id);
-      return Legion::Runtime::start(argc, argv);
-    } else {
-      return 0;
+    // register tasks 
+    template <typename F, F func_ptr>
+    void register_task(const char* name)
+    {
+      UserTask new_task(name);
+      new_task.register_task<F, func_ptr>();
+      user_task_map.insert(std::make_pair((uintptr_t)func_ptr, new_task)); 
     }
-  }
   
-  template <typename F, typename ...Args>
-  Future execute_task(F func_ptr, context &c, Args... a)
-  {
-    UserTask *t = get_user_task_obj((uintptr_t)func_ptr);
-    if (t != NULL) {
-      Future fut = t->launch_single_task(func_ptr, c, a...);
-      return fut;
-    } else {
-      Future fut;
-      return fut;
+    // start runtime
+    template <typename F>
+    int start(F func_ptr, int argc, char** argv)
+    { 
+      UserTask *t = get_user_task_obj((uintptr_t)func_ptr);
+      if (t != NULL) {
+        Legion::Runtime::set_top_level_task_id(t->id);
+        return Legion::Runtime::start(argc, argv);
+      } else {
+        return 0;
+      }
     }
-  }
   
-  template <size_t DIM, typename F, typename ...Args>
-  FutureMap execute_task(F func_ptr, context &c, IdxSpace<DIM> &is, Args... a)
-  {
-    UserTask *t = get_user_task_obj((uintptr_t)func_ptr);
-    if (t != NULL) {
-      FutureMap fut = t->launch_index_task(func_ptr, c, is, a...);
-      return fut;
-    } else {
-      FutureMap fut;
-      return fut;
+    // task launcher
+    template <typename F, typename ...Args>
+    Future execute_task(F func_ptr, context &c, Args... a)
+    {
+      UserTask *t = get_user_task_obj((uintptr_t)func_ptr);
+      if (t != NULL) {
+        Future fut = t->launch_single_task(func_ptr, c, a...);
+        return fut;
+      } else {
+        Future fut;
+        return fut;
+      }
     }
-  }
   
-  template <size_t DIM, typename F, typename ...Args>
-  FutureMap execute_task(F func_ptr, context &c, IdxSpace<DIM> &is, ArgMap argmap, Args... a)
-  {
-    UserTask *t = get_user_task_obj((uintptr_t)func_ptr);
-    if (t != NULL) {
-      FutureMap fut = t->launch_index_task(func_ptr, c, is, argmap, a...);
-      return fut;
-    } else {
-      FutureMap fut;
-      return fut;
+    // index task launcher
+    template <size_t DIM, typename F, typename ...Args>
+    FutureMap execute_task(F func_ptr, context &c, IdxSpace<DIM> &is, Args... a)
+    {
+      UserTask *t = get_user_task_obj((uintptr_t)func_ptr);
+      if (t != NULL) {
+        FutureMap fut = t->launch_index_task(func_ptr, c, is, a...);
+        return fut;
+      } else {
+        FutureMap fut;
+        return fut;
+      }
     }
-  }
   
-private:
-  UserTask* get_user_task_obj(uintptr_t func_ptr)
-  {
-    std::map<uintptr_t, UserTask>::iterator it = user_task_map.find(func_ptr);
-    if (it != user_task_map.end()) {
-      return &(it->second);
-    } else {
-      printf("can not find task %p\n", (void*)func_ptr);
-      return NULL;
+    // index task launcher with argmap
+    template <size_t DIM, typename F, typename ...Args>
+    FutureMap execute_task(F func_ptr, context &c, IdxSpace<DIM> &is, ArgMap argmap, Args... a)
+    {
+      UserTask *t = get_user_task_obj((uintptr_t)func_ptr);
+      if (t != NULL) {
+        FutureMap fut = t->launch_index_task(func_ptr, c, is, argmap, a...);
+        return fut;
+      } else {
+        FutureMap fut;
+        return fut;
+      }
     }
-  }  
-};
+  
+  private:
+    // query task by task function ptr
+    UserTask* get_user_task_obj(uintptr_t func_ptr);  
+  };
 
-TaskRuntime runtime;
+  extern TaskRuntime runtime;
 /*
 template <void (*f) (context)>
 int start(_task<void (*) (context), f> t, int argc, char** argv){ 
@@ -1314,4 +1310,8 @@ void _copy(context _c, r_region<a, ndim> r, w_region<a, ndim> w){
   }
 }
 */
-} /* namespace Equites */
+}; // namespace LegionSimplified
+
+#include "legion_simplified.inl"
+
+#endif // _LEGION_SIMPLIFIED_H

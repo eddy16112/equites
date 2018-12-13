@@ -1,5 +1,5 @@
-#include <equites.h>
-using namespace equites;
+#include <legion_simplified.h>
+using namespace LegionSimplified;
 
 void hello_world(context c, int i)
 {
