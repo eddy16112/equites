@@ -1,12 +1,17 @@
 #include "legion_simplified.h"
 
 namespace LegionSimplified {
+  
+  // Global id that is indexed for tasks
+  static Legion::TaskID globalId = 0;
+  
   TaskRuntime runtime;
 
   /////////////////////////////////////////////////////////////
-  // Fdpace
+  // FdSpace
   /////////////////////////////////////////////////////////////
   
+  // public
   FdSpace::FdSpace(const context& c) : ctx(c)
   {
     fs = c.runtime->create_field_space(c.ctx);
@@ -14,18 +19,26 @@ namespace LegionSimplified {
     field_id_vec.clear();
   }
 
-  FdSpace::~FdSpace()
+  FdSpace::~FdSpace(void)
   {
     ctx.runtime->destroy_field_space(ctx.ctx, fs);
+  }
+  
+  void FdSpace::add_field(size_t size, field_id_t fid)
+  {
+    allocator.allocate_field(size,fid);
+    field_id_vec.push_back(fid);
   }
 
   /////////////////////////////////////////////////////////////
   // UserTask 
   /////////////////////////////////////////////////////////////
   
+  // public
   UserTask::UserTask(const char* name="default") : task_name(name)
   {
     id = globalId++; // still not sure about this
+    printf("task id %u\n", id);
   }
   
   UserTask::~UserTask(void)
@@ -36,6 +49,7 @@ namespace LegionSimplified {
   // TaskRuntime 
   /////////////////////////////////////////////////////////////
   
+  // public
   TaskRuntime::TaskRuntime(void)
   {
     user_task_map.clear();
