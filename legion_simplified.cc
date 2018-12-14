@@ -6,12 +6,12 @@ namespace LegionSimplified {
   static Legion::TaskID globalId = 0;
   
   TaskRuntime runtime;
-
+  
   /////////////////////////////////////////////////////////////
   // FdSpace
   /////////////////////////////////////////////////////////////
   
-  // public
+  //----------------------------------public-------------------------------------
   FdSpace::FdSpace(const context& c) : ctx(c)
   {
     fs = c.runtime->create_field_space(c.ctx);
@@ -34,7 +34,7 @@ namespace LegionSimplified {
   // UserTask 
   /////////////////////////////////////////////////////////////
   
-  // public
+  //----------------------------------public-------------------------------------
   UserTask::UserTask(const char* name="default") : task_name(name)
   {
     id = globalId++; // still not sure about this
@@ -49,7 +49,7 @@ namespace LegionSimplified {
   // TaskRuntime 
   /////////////////////////////////////////////////////////////
   
-  // public
+  //----------------------------------public-------------------------------------
   TaskRuntime::TaskRuntime(void)
   {
     user_task_map.clear();

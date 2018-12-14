@@ -430,4 +430,124 @@ namespace LegionSimplified {
     assert(this->base_region_impl->task_field_vector.size() == 1);
     return get_accessor_by_fid<a>(this->base_region_impl->task_field_vector[0]);
   }
+  
+  /////////////////////////////////////////////////////////////
+  // UserTask 
+  /////////////////////////////////////////////////////////////
+  
+  //----------------------------------public-------------------------------------
+  template <typename F, F f>
+  void UserTask::register_task(void)
+  {
+    typedef typename function_traits<F>::returnType RT; 
+    Legion::ProcessorConstraint pc = Legion::ProcessorConstraint(Legion::Processor::LOC_PROC);
+    Legion::TaskVariantRegistrar registrar(id, task_name.c_str());
+    registrar.add_constraint(pc);
+    TaskRegistration<RT, F, f>::variant(registrar); 
+  }
+  
+  template <typename F, typename ...Args>
+  Future UserTask::launch_single_task(F f, context &c, Args... a)
+  {
+    typedef typename function_traits<F>::args argtuple;
+    argtuple p = std::make_tuple(a...);
+    //auto r = std::get<0>(p);
+    //printf("p1 count %ld\n", r.base_region_impl.use_count());
+    argtuple p2 = std::make_tuple(a...);
+    //auto r2 = std::get<0>(p2);
+    //printf("p2 count %ld\n", r2.base_region_impl.use_count());
+    base_region_cleanup_shared_ptr_tuple_walker(p2);
+    Legion::TaskLauncher task_launcher(id, Legion::TaskArgument(&p2, sizeof(p2))); 
+    task_launcher_region_requirement_tuple_walker(task_launcher, p);  
+    return Future(c.runtime->execute_task(c.ctx, task_launcher));
+  }
+  
+  // launch index task  
+  template <size_t DIM, typename F, typename ...Args>
+  FutureMap UserTask::launch_index_task(F f, context &c, IdxSpace<DIM> &ispace, Args... a){
+    typedef typename function_traits<F>::args argtuple;
+    argtuple p = std::make_tuple(a...);
+    argtuple p2 = std::make_tuple(a...);
+    base_region_cleanup_shared_ptr_tuple_walker(p2);
+    Legion::ArgumentMap arg_map; 
+    Legion::IndexLauncher index_launcher(id, ispace.is, Legion::TaskArgument(&p2, sizeof(p2)), arg_map); 
+    index_launcher_region_requirement_tuple_walker(index_launcher, p);  
+    return FutureMap(c.runtime->execute_index_space(c.ctx, index_launcher));
+  }
+
+  // launch index task with argmap
+  template <size_t DIM, typename F, typename ...Args>
+  FutureMap UserTask::launch_index_task(F f, context &c, IdxSpace<DIM> &ispace, ArgMap argmap, Args... a){
+    typedef typename function_traits<F>::args argtuple;
+    argtuple p = std::make_tuple(a...);
+    argtuple p2 = std::make_tuple(a...);
+    base_region_cleanup_shared_ptr_tuple_walker(p2);
+    Legion::IndexLauncher index_launcher(id, ispace.is, Legion::TaskArgument(&p2, sizeof(p2)), argmap.arg_map); 
+    index_launcher_region_requirement_tuple_walker(index_launcher, p);  
+    return FutureMap(c.runtime->execute_index_space(c.ctx, index_launcher));
+  }
+  
+  /////////////////////////////////////////////////////////////
+  // TaskRuntime 
+  /////////////////////////////////////////////////////////////
+  
+  //----------------------------------public-------------------------------------
+  template <typename F, F func_ptr>
+  void TaskRuntime::register_task(const char* name)
+  {
+    UserTask new_task(name);
+    new_task.register_task<F, func_ptr>();
+    user_task_map.insert(std::make_pair((uintptr_t)func_ptr, new_task)); 
+  }
+
+  template <typename F>
+  int TaskRuntime::start(F func_ptr, int argc, char** argv)
+  { 
+    UserTask *t = get_user_task_obj((uintptr_t)func_ptr);
+    if (t != NULL) {
+      Legion::Runtime::set_top_level_task_id(t->id);
+      return Legion::Runtime::start(argc, argv);
+    } else {
+      return 0;
+    }
+  }
+  
+  template <typename F, typename ...Args>
+  Future TaskRuntime::execute_task(F func_ptr, context &c, Args... a)
+  {
+    UserTask *t = get_user_task_obj((uintptr_t)func_ptr);
+    if (t != NULL) {
+      Future fut = t->launch_single_task(func_ptr, c, a...);
+      return fut;
+    } else {
+      Future fut;
+      return fut;
+    }
+  }
+
+  template <size_t DIM, typename F, typename ...Args>
+  FutureMap TaskRuntime::execute_task(F func_ptr, context &c, IdxSpace<DIM> &is, Args... a)
+  {
+    UserTask *t = get_user_task_obj((uintptr_t)func_ptr);
+    if (t != NULL) {
+      FutureMap fut = t->launch_index_task(func_ptr, c, is, a...);
+      return fut;
+    } else {
+      FutureMap fut;
+      return fut;
+    }
+  }
+
+  template <size_t DIM, typename F, typename ...Args>
+  FutureMap TaskRuntime::execute_task(F func_ptr, context &c, IdxSpace<DIM> &is, ArgMap argmap, Args... a)
+  {
+    UserTask *t = get_user_task_obj((uintptr_t)func_ptr);
+    if (t != NULL) {
+      FutureMap fut = t->launch_index_task(func_ptr, c, is, argmap, a...);
+      return fut;
+    } else {
+      FutureMap fut;
+      return fut;
+    }
+  }
 }; // namespace LegionSimplified

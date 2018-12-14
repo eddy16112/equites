@@ -1,5 +1,5 @@
-#include <equites.h>
-using namespace equites;
+#include <legion_simplified.h>
+using namespace LegionSimplified;
 
 void inc(context _c, rw_region<int, 1> r, int x) {
   for(auto i : r)
