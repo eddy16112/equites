@@ -15,6 +15,8 @@
 #define PR_INLINE_MAPPED  1
 #define PR_TASK_MAPPED    2
 
+#define VERBOSE_PRINT     1
+
 namespace LegionSimplified { 
   
   enum partition_type
@@ -23,9 +25,8 @@ namespace LegionSimplified {
     restriction,
   };
 
-  template <size_t ndim>  using Point = LegionRuntime::Arrays::Point<ndim>;  
-  template <size_t ndim>  using Rect = LegionRuntime::Arrays::Rect<ndim>;  
-  using LegionRuntime::Arrays::make_point;
+  template <size_t DIM>  using Point = Legion::Point<DIM>;  
+  template <size_t DIM>  using Rect = Legion::Rect<DIM>;  
 
   typedef Legion::FieldID field_id_t;
 
@@ -221,7 +222,7 @@ namespace LegionSimplified {
     template<typename T, size_t DIM>
     T get(const Point<DIM> &point)
     { 
-      Future fu(fm.get_future(Legion::DomainPoint::from_point<DIM>(point))); 
+      Future fu(fm.get_future(point)); 
       return fu.get<T>();
     }
     template<typename T>
@@ -267,7 +268,7 @@ namespace LegionSimplified {
     template<typename T, size_t DIM>
     void set_point(const Point<DIM> &point, T val)
     {
-      arg_map.set_point(Legion::DomainPoint::from_point<DIM>(point), Legion::TaskArgument(&val, sizeof(T)));
+      arg_map.set_point(point, Legion::TaskArgument(&val, sizeof(T)));
     }
     template<typename T>
     void set_point(const Point<1> &point, T val)
@@ -851,6 +852,8 @@ unsigned int references;
   };
 
   extern TaskRuntime runtime;
+  
+  void debug_printf(int verbose_level, const char *format, ...);
 
 }; // namespace LegionSimplified
 

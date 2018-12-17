@@ -70,4 +70,17 @@ namespace LegionSimplified {
     }
   }
   
+  void debug_printf(int verbose_level, const char *format, ...)
+  {
+    if (verbose_level > VERBOSE_PRINT) {
+      return;
+    } else {
+      va_list args;
+      va_start(args, format);
+      vprintf(format, args);
+      va_end(args);
+      return;
+    }
+  }
+  
 }; // namespace LegionSimplified

@@ -13,7 +13,7 @@ namespace LegionSimplified {
     rect = Rect<DIM>(Point<DIM>::ZEROES(), p-Point<DIM>::ONES());
     std::cout << "ispace set rect to be from " << Point<DIM>::ZEROES() 
       << " to " << rect.hi << std::endl; 
-    is = c.runtime->create_index_space(c.ctx, Legion::Domain::from_rect<DIM>(rect)); 
+    is = c.runtime->create_index_space(c.ctx, rect); 
   }
   
   template <size_t DIM>
@@ -79,7 +79,7 @@ namespace LegionSimplified {
     Legion::DomainTransform &dt, Rect<DIM> &rect) : 
     ctx(r.ctx), region(r)
   {
-    ip = ctx.runtime->create_partition_by_restriction(ctx.ctx, r.idx_space.is, ispace.is, dt, Legion::Domain::from_rect<DIM>(rect));
+    ip = ctx.runtime->create_partition_by_restriction(ctx.ctx, r.idx_space.is, ispace.is, dt, rect);
     lp = ctx.runtime->get_logical_partition(ctx.ctx, r.lr, ip);
   }
   
@@ -157,7 +157,7 @@ namespace LegionSimplified {
        base_region_impl->task_field_vector.push_back(*it); 
     }
     ctx = &(r->ctx);
-    base_region_impl->domain = Legion::Domain::from_rect<DIM>(r->idx_space.rect);
+    base_region_impl->domain = Legion::Domain(r->idx_space.rect);
     printf("base constructor with r v\n");
   }
 
@@ -174,7 +174,7 @@ namespace LegionSimplified {
        printf("base set fid %d\n", *it);
        base_region_impl->task_field_vector.push_back(*it); 
     }
-    base_region_impl->domain = Legion::Domain::from_rect<DIM>(r->idx_space.rect);
+    base_region_impl->domain = Legion::Domain(r->idx_space.rect);
     printf("base constructor with r\n");
   }
 
@@ -191,7 +191,7 @@ namespace LegionSimplified {
        printf("base set fid %d\n", *it);
        base_region_impl->task_field_vector.push_back(*it); 
     }
-    base_region_impl->domain = Legion::Domain::from_rect<DIM>(base_region_impl->region->idx_space.rect);
+    base_region_impl->domain = Legion::Domain(base_region_impl->region->idx_space.rect);
     printf("base constructor with p v\n");
   }
 
@@ -209,7 +209,7 @@ namespace LegionSimplified {
        printf("base set fid %d\n", *it);
        base_region_impl->task_field_vector.push_back(*it); 
     }
-    base_region_impl->domain = Legion::Domain::from_rect<DIM>(base_region_impl->region->idx_space.rect);
+    base_region_impl->domain = Legion::Domain(base_region_impl->region->idx_space.rect);
     printf("base constructor with p\n");
   }
   
@@ -246,7 +246,14 @@ namespace LegionSimplified {
       }
       base_region_impl = NULL;
     }*/
-  //  printf("base de-constructor\n");
+    long use_count = 0;
+    if (base_region_impl != nullptr) 
+    {
+      use_count = base_region_impl.use_count();
+    } else {
+      use_count = -1;
+    }
+    printf("base de-constructor, shared_ptr use count %ld\n", use_count);
   }
 
   template <size_t DIM>
@@ -311,7 +318,7 @@ namespace LegionSimplified {
       auto tmp = base_region_impl;
       printf("This %p, reset base_region_impl %p, count %ld\n", this, base_region_impl.get(), base_region_impl.use_count());
       base_region_impl.reset();
-      //printf("This %p, reset tmp %p, count %d\n", this, tmp.get(), tmp.use_count());
+      printf("This %p, reset tmp %p, count %ld\n", this, tmp.get(), tmp.use_count());
       base_region_impl = nullptr;
       printf("after nullptr %ld\n", tmp.use_count());
     }

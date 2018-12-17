@@ -39,7 +39,7 @@ void print_value(context c, RO_Region<2> region_xy){
 
 void top_level(context c)
 { 
-  IdxSpace<2> ispace(c, make_point(2,2));
+  IdxSpace<2> ispace(c, makepoint(2,3));
   
   FdSpace input_fs(c);
   input_fs.add_field<float>(FID_X);
