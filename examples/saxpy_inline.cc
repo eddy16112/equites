@@ -1,5 +1,5 @@
-#include <equites.h>
-using namespace equites;
+#include <legion_simplified.h>
+using namespace LegionSimplified;
 
 enum FieldIDs {
   FID_X = 3,
@@ -53,11 +53,11 @@ void top_level(context c)
   FdSpace input_fs(c);
   input_fs.add_field<float>(FID_X);
   input_fs.add_field<float>(FID_Y);
-  Region<1> input_lr(c, ispace, input_fs);
+  Region<1> input_lr(ispace, input_fs);
   
   FdSpace output_fs(c);
   output_fs.add_field<float>(FID_Z);
-  Region<1> output_lr(c, ispace, output_fs);
+  Region<1> output_lr(ispace, output_fs);
   
   float alpha = 2;
   auto rw_xy = RW_Region<1>(&input_lr);
@@ -78,7 +78,7 @@ void top_level(context c)
   }
   
   
- // wd_z.unmap_physical_region_inline();
+  //wd_z.unmap_physical_region_inline();
   auto ro_z = RO_Region<1>(&output_lr);
   ro_z.map_physical_region_inline();
   

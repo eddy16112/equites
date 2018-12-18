@@ -101,7 +101,7 @@ namespace LegionSimplified {
     region = nullptr;
     partition = nullptr;
     is_mapped = PR_NOT_MAPPED;
-    task_field_vector.clear();
+    field_id_vector.clear();
     accessor_map.clear();
     domain = Legion::Domain::NO_DOMAIN;
   }
@@ -121,7 +121,7 @@ namespace LegionSimplified {
       }
     }
     accessor_map.clear();
-    task_field_vector.clear();
+    field_id_vector.clear();
   }
   
   /////////////////////////////////////////////////////////////
@@ -154,7 +154,7 @@ namespace LegionSimplified {
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        printf("base set fid %d\n", *it);
-       base_region_impl->task_field_vector.push_back(*it); 
+       base_region_impl->field_id_vector.push_back(*it); 
     }
     ctx = &(r->ctx);
     base_region_impl->domain = Legion::Domain(r->idx_space.rect);
@@ -172,7 +172,7 @@ namespace LegionSimplified {
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        printf("base set fid %d\n", *it);
-       base_region_impl->task_field_vector.push_back(*it); 
+       base_region_impl->field_id_vector.push_back(*it); 
     }
     base_region_impl->domain = Legion::Domain(r->idx_space.rect);
     printf("base constructor with r\n");
@@ -189,7 +189,7 @@ namespace LegionSimplified {
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        printf("base set fid %d\n", *it);
-       base_region_impl->task_field_vector.push_back(*it); 
+       base_region_impl->field_id_vector.push_back(*it); 
     }
     base_region_impl->domain = Legion::Domain(base_region_impl->region->idx_space.rect);
     printf("base constructor with p v\n");
@@ -207,7 +207,7 @@ namespace LegionSimplified {
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        printf("base set fid %d\n", *it);
-       base_region_impl->task_field_vector.push_back(*it); 
+       base_region_impl->field_id_vector.push_back(*it); 
     }
     base_region_impl->domain = Legion::Domain(base_region_impl->region->idx_space.rect);
     printf("base constructor with p\n");
@@ -270,7 +270,7 @@ namespace LegionSimplified {
   {
     Legion::RegionRequirement req(base_region_impl->region->lr, pm, cp, base_region_impl->region->lr_parent);
     std::vector<field_id_t>::iterator it; 
-    for (it = base_region_impl->task_field_vector.begin(); it < base_region_impl->task_field_vector.end(); it++) {
+    for (it = base_region_impl->field_id_vector.begin(); it < base_region_impl->field_id_vector.end(); it++) {
       printf("base set RR fid %d\n", *it);
       req.add_field(*it); 
     }
@@ -282,7 +282,7 @@ namespace LegionSimplified {
   {
     Legion::RegionRequirement req(base_region_impl->partition->lp, 0, pm, cp, base_region_impl->region->lr);
     std::vector<field_id_t>::iterator it; 
-    for (it = base_region_impl->task_field_vector.begin(); it < base_region_impl->task_field_vector.end(); it++) {
+    for (it = base_region_impl->field_id_vector.begin(); it < base_region_impl->field_id_vector.end(); it++) {
       printf("index base set RR fid %d\n", *it);
       req.add_field(*it); 
     }
@@ -300,7 +300,7 @@ namespace LegionSimplified {
     base_region_impl->physical_region = pr;
     std::set<field_id_t>::iterator it;
     for (it = rr.privilege_fields.begin(); it != rr.privilege_fields.end(); it++) {
-      base_region_impl->task_field_vector.push_back(*it);
+      base_region_impl->field_id_vector.push_back(*it);
       printf("map_physical_region rr field %d, set acc \n", *it);
       unsigned char *null_ptr = nullptr;
       base_region_impl->accessor_map.insert(std::make_pair(*it, null_ptr)); 
@@ -308,6 +308,38 @@ namespace LegionSimplified {
     ctx = &c;
     base_region_impl->domain = c.runtime->get_index_space_domain(c.ctx, rr.region.get_index_space());
     base_region_impl->is_mapped = PR_TASK_MAPPED;
+  }
+  
+  template <size_t DIM>
+  void Base_Region<DIM>::map_physical_region_inline()
+  {
+    if (base_region_impl->is_mapped != PR_NOT_MAPPED) {
+      return;
+    }
+    assert(ctx != NULL);
+    Legion::RegionRequirement req(base_region_impl->region->lr, pm, cp, base_region_impl->region->lr_parent);
+    std::vector<field_id_t>::iterator it; 
+    for (it = base_region_impl->field_id_vector.begin(); it < base_region_impl->field_id_vector.end(); it++) {
+      printf("base %p, inline map fid %d\n", this, *it);
+      req.add_field(*it);
+      unsigned char *null_ptr = NULL;
+      base_region_impl->accessor_map.insert(std::make_pair(*it, null_ptr));  
+      base_region_impl->region->update_inline_mapping_map(*it, this);
+    }
+    base_region_impl->physical_region = ctx->runtime->map_region(ctx->ctx, req);
+    base_region_impl->domain = ctx->runtime->get_index_space_domain(ctx->ctx, req.region.get_index_space());
+    base_region_impl->is_mapped = PR_INLINE_MAPPED;
+  }
+  
+  template <size_t DIM>
+  void Base_Region<DIM>::unmap_physical_region_inline()
+  {
+    if (base_region_impl->is_mapped == PR_INLINE_MAPPED) {
+      assert(ctx != NULL);
+      ctx->runtime->unmap_region(ctx->ctx, base_region_impl->physical_region);
+      base_region_impl->is_mapped = PR_NOT_MAPPED;
+      printf("base %p, unmap region\n", this);
+    }
   }
   
   template <size_t DIM>
@@ -432,8 +464,8 @@ namespace LegionSimplified {
   template< typename a>
   Legion::FieldAccessor<READ_ONLY, a, DIM>* RO_Region<DIM>::get_default_accessor(void)
   {
-    assert(this->base_region_impl->task_field_vector.size() == 1);
-    return get_accessor_by_fid<a>(this->base_region_impl->task_field_vector[0]);
+    assert(this->base_region_impl->field_id_vector.size() == 1);
+    return get_accessor_by_fid<a>(this->base_region_impl->field_id_vector[0]);
   }
   
   /////////////////////////////////////////////////////////////
@@ -527,8 +559,8 @@ namespace LegionSimplified {
   template< typename a>
   Legion::FieldAccessor<WRITE_DISCARD, a, DIM>* WD_Region<DIM>::get_default_accessor(void)
   {
-    assert(this->base_region_impl->task_field_vector.size() == 1);
-    return get_accessor_by_fid<a>(this->base_region_impl->task_field_vector[0]);
+    assert(this->base_region_impl->field_id_vector.size() == 1);
+    return get_accessor_by_fid<a>(this->base_region_impl->field_id_vector[0]);
   } 
   
   /////////////////////////////////////////////////////////////
@@ -643,8 +675,8 @@ namespace LegionSimplified {
   template< typename a>
   Legion::FieldAccessor<READ_WRITE, a, DIM>* RW_Region<DIM>::get_default_accessor(void)
   {
-    assert(this->base_region_impl->task_field_vector.size() == 1);
-    return get_accessor_by_fid<a>(this->base_region_impl->task_field_vector[0]);
+    assert(this->base_region_impl->field_id_vector.size() == 1);
+    return get_accessor_by_fid<a>(this->base_region_impl->field_id_vector[0]);
   }
   
   /////////////////////////////////////////////////////////////

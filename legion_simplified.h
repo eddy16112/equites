@@ -118,22 +118,25 @@ namespace LegionSimplified {
     const FdSpace &fd_space;
     Legion::LogicalRegion lr; 
     Legion::LogicalRegion lr_parent;
-    std::map<int, Base_Region<DIM> *> inline_mapping_map;
+    mutable std::map<field_id_t, Base_Region<DIM> *> inline_mapping_map;
   
   public:
     Region(IdxSpace<DIM> &ispace, FdSpace &fspace);
   
     ~Region(void);
-  
-    void unmap_inline_mapping(field_id_t fid)
+    
+    void update_inline_mapping_map(field_id_t fid, Base_Region<DIM> *new_base_region) const
     {
-      typename std::map<int, Base_Region<DIM> *>::iterator it = inline_mapping_map.find(fid);
+      typename std::map<field_id_t, Base_Region<DIM> *>::iterator it = inline_mapping_map.find(fid);
+      printf("region %p, update inline mapping map with fid %d\n", this, fid);
       if (it != inline_mapping_map.end()) {
         if (it->second != nullptr) {
-          printf("fid %d is already mapped, let's unmap it first\n", fid);
+          printf("fid %d is already mapped, let's unmap it firs, and update the base_region from %p to %p t\n", fid, it->second, new_base_region);
           Base_Region<DIM> *base_region = it->second;
           base_region->unmap_physical_region_inline();
-          it->second = nullptr;
+          it->second = new_base_region;
+        } else {
+          it->second = new_base_region;
         }
       } else {
         printf("can not find fid %d\n", fid);
@@ -142,18 +145,6 @@ namespace LegionSimplified {
       }
     }
   
-    void update_inline_mapping_region(Base_Region<DIM> *base_region, field_id_t fid)
-    {
-      typename std::map<int, Base_Region<DIM> *>::iterator it = inline_mapping_map.find(fid);
-      if (it != inline_mapping_map.end()) {
-        assert(it->second == nullptr);
-        it->second = base_region;
-      } else {
-        printf("can not find fid %d\n", fid);
-        assert(0);
-        return;
-      }
-    }
   };
 
   /**
@@ -325,7 +316,7 @@ unsigned int references;
     int is_mapped;
     Legion::Domain domain;
     Legion::PhysicalRegion physical_region;
-    std::vector<field_id_t> task_field_vector;
+    std::vector<field_id_t> field_id_vector;
     std::map<field_id_t, unsigned char*> accessor_map;
     
   public:
@@ -372,40 +363,9 @@ unsigned int references;
   
     void map_physical_region(context &c, Legion::PhysicalRegion &pr, Legion::RegionRequirement &rr);
   
-    void map_physical_region_inline()
-    {
-  #if 0
-      if (is_pr_mapped != PR_NOT_MAPPED) {
-        return;
-      }
-      assert(ctx != NULL);
-      Legion::RegionRequirement req(region->lr, pm, cp, region->lr_parent);
-      std::vector<field_id_t>::iterator it; 
-      for (it = task_field_vector.begin(); it < task_field_vector.end(); it++) {
-        printf("base set RR fid %d\n", *it);
-        req.add_field(*it);
-        unsigned char *null_ptr = NULL;
-        accessor_map.insert(std::make_pair(*it, null_ptr));  
-        region->unmap_inline_mapping(*it);
-        region->update_inline_mapping_region(this, *it);
-      }
-      physical_region = ctx->runtime->map_region(ctx->ctx, req);
-      //domain = c.runtime->get_index_space_domain(c.ctx, req.region.get_index_space());
-      is_pr_mapped = PR_INLINE_MAPPED;
-    #endif
-    }
+    void map_physical_region_inline();
   
-    void unmap_physical_region_inline()
-    {
-  #if 0
-      if (is_pr_mapped == PR_INLINE_MAPPED) {
-        assert(ctx != NULL);
-        ctx->runtime->unmap_region(ctx->ctx, physical_region);
-        is_pr_mapped = PR_NOT_MAPPED;
-        printf("base unmap region\n");
-      }
-      #endif
-    }
+    void unmap_physical_region_inline();
   
     void cleanup_reference();
   

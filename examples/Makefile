@@ -4,7 +4,7 @@ ldflags=-L${legion_install_dir}/lib64/ -llegion -lrealm -lpthread -ldl -rdynamic
 cflags=-std=c++14 -Wall -I${legion_install_dir}/include -I.. -g
 CC=g++
 
-examples= hello_world fib index_tasks saxpy_index saxpy 2d multiple_partitions
+examples= saxpy_inline
 #examples=vpsc_example hello_world fib index_tasks saxpy_index saxpy 2d multiple_partitions
 
 all: ${examples}
