@@ -125,25 +125,9 @@ namespace LegionSimplified {
   
     ~Region(void);
     
-    void update_inline_mapping_map(field_id_t fid, Base_Region<DIM> *new_base_region) const
-    {
-      typename std::map<field_id_t, Base_Region<DIM> *>::iterator it = inline_mapping_map.find(fid);
-      printf("region %p, update inline mapping map with fid %d\n", this, fid);
-      if (it != inline_mapping_map.end()) {
-        if (it->second != nullptr) {
-          printf("fid %d is already mapped, let's unmap it firs, and update the base_region from %p to %p t\n", fid, it->second, new_base_region);
-          Base_Region<DIM> *base_region = it->second;
-          base_region->unmap_physical_region_inline();
-          it->second = new_base_region;
-        } else {
-          it->second = new_base_region;
-        }
-      } else {
-        printf("can not find fid %d\n", fid);
-        assert(0);
-        return;
-      }
-    }
+    void update_inline_mapping_map(field_id_t fid, Base_Region<DIM> *new_base_region) const;
+    
+    void remove_inline_mapping_map(Base_Region<DIM> *old_base_region) const;
   
   };
 
@@ -418,6 +402,7 @@ unsigned int references;
     void init_parameters();
   
     void check_empty();
+    
   };
 
 

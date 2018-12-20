@@ -57,8 +57,48 @@ namespace LegionSimplified {
   template <size_t DIM>
   Region<DIM>::~Region(void)
   {
+    printf("region des %p\n", this);
+    typename std::map<field_id_t, Base_Region<DIM> *>::iterator it;
+    for (it = inline_mapping_map.begin(); it != inline_mapping_map.end(); it++) {
+      if (it->second != nullptr) {
+        assert(0);
+      }
+    }
     inline_mapping_map.clear();
     ctx.runtime->destroy_logical_region(ctx.ctx, lr);
+  }
+  
+  template <size_t DIM>
+  void Region<DIM>:: update_inline_mapping_map(field_id_t fid, Base_Region<DIM> *new_base_region) const
+  {
+    typename std::map<field_id_t, Base_Region<DIM> *>::iterator it = inline_mapping_map.find(fid);
+    printf("region %p, update inline mapping map with fid %d\n", this, fid);
+    if (it != inline_mapping_map.end()) {
+      if (it->second != nullptr) {
+        printf("fid %d is already mapped, let's unmap it first, and update the base_region from %p to %p \n", fid, it->second, new_base_region);
+        Base_Region<DIM> *base_region = it->second;
+        base_region->unmap_physical_region_inline();
+        it->second = new_base_region;
+      } else {
+        it->second = new_base_region;
+      }
+    } else {
+      printf("can not find fid %d\n", fid);
+      assert(0);
+      return;
+    }
+  }
+  
+  template <size_t DIM>
+  void Region<DIM>:: remove_inline_mapping_map(Base_Region<DIM> *old_base_region) const
+  {
+    typename std::map<field_id_t, Base_Region<DIM> *>::iterator it;
+    for (it = inline_mapping_map.begin(); it != inline_mapping_map.end(); it++) {
+      if (it->second == old_base_region) {
+        printf("find fid %ld, base_region %p\n", it->first, it->second);
+        it->second = nullptr;
+      }
+    }
   }
   
   /////////////////////////////////////////////////////////////
@@ -216,11 +256,13 @@ namespace LegionSimplified {
   template <size_t DIM>
   Base_Region<DIM>::~Base_Region(void)
   {
-    /*
-    if (is_pr_mapped == PR_INLINE_MAPPED) {
-      unmap_physical_region_inline();
+    if (base_region_impl != nullptr) {
+      if (base_region_impl->is_mapped == PR_INLINE_MAPPED) {
+        base_region_impl->region->remove_inline_mapping_map(this);
+        unmap_physical_region_inline();
+      }
     }
-  
+    /*
     std::map<field_id_t, unsigned char*>::iterator it; 
     for (it = accessor_map.begin(); it != accessor_map.end(); it++) {
       if (it->second != NULL) {
@@ -253,7 +295,7 @@ namespace LegionSimplified {
     } else {
       use_count = -1;
     }
-    printf("base de-constructor, shared_ptr use count %ld\n", use_count);
+    printf("base_region %p de-constructor, shared_ptr use count %ld\n", this, use_count);
   }
 
   template <size_t DIM>

@@ -7,45 +7,6 @@ enum FieldIDs {
   FID_Z,
 };
 
-void saxpy(context c, float alpha, RW_Region<1> region_xy, WD_Region<1> region_z){
-  /*
-  for(auto i : ab) {
-    float z = c.read(i, FID_Z);
-    float x = ab.read(i, FID_X);
-    float y = ab.read(i, FID_Y);
-    c.write(i, FID_Z, z + x * alpha + y);
-  }*/
-  for (RW_Region<1>::iterator pir(region_xy); pir(); pir++) {
-    float x = region_xy.read<float>(FID_X, *pir);
-    float y = region_xy.read<float>(FID_Y, *pir);
-    region_z.write<float>(FID_Z, *pir, x * alpha + y);
-  }
-}
-
-void init_value(context c, WD_Region<1> region_xy){
-  for (WD_Region<1>::iterator pir(region_xy); pir(); pir++) {
-    float value = 2;
-    region_xy.write<float>(*pir, value);
-  }
-}
-
-void check(context c, RO_Region<1> region_xy, RO_Region<1> region_z){
-  /*
-  for(auto i : ab) {
-    float z = c.read(i, FID_Z);
-    float x = ab.read(i, FID_X);
-    float y = ab.read(i, FID_Y);
-    printf("x %f, y %f, z %f\n", x, y, z);
-  } */
-  
-  for (RW_Region<1>::iterator pir(region_xy); pir(); pir++) {
-    float x = region_xy.read<float>(FID_X, *pir);
-    float y = region_xy.read<float>(FID_Y, *pir);
-    float z = region_z.read<float>(FID_Z, *pir);
-    printf("x %f, y %f, z %f\n", x, y, z);
-  }
-}
-
 void top_level(context c)
 { 
   IdxSpace<1> ispace(c, 10);
@@ -77,7 +38,6 @@ void top_level(context c)
     wd_z.write<float>(FID_Z, *pir, x * alpha + y);
   }
   
-  
   //wd_z.unmap_physical_region_inline();
   auto ro_z = RO_Region<1>(&output_lr);
   ro_z.map_physical_region_inline();
@@ -89,12 +49,10 @@ void top_level(context c)
     printf("x %f, y %f, z %f\n", x, y, z);
   }
   
+  wd_z.map_physical_region_inline();
 }
 
 int main(int argc, char** argv){
   runtime.register_task<decltype(&top_level), top_level>("top_level");
-  runtime.register_task<decltype(&saxpy), saxpy>("saxpy");
-  runtime.register_task<decltype(&check), check>("check");
-  runtime.register_task<decltype(&init_value), init_value>("init_value");
   runtime.start(top_level, argc, argv);
 }
