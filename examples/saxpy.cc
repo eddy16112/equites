@@ -92,8 +92,8 @@ void top_level(context c)
   
   std::vector<field_id_t> x_vec{FID_X};
   auto wd_x = WD_Region<1>(&input_lr, x_vec);
-  auto tmp = wd_x;
-  printf("count %ld, tmp count %d\n", wd_x.base_region_impl.use_count(), tmp.base_region_impl.use_count());
+  //auto tmp = wd_x;
+  //printf("count %ld, tmp count %d\n", wd_x.base_region_impl.use_count(), tmp.base_region_impl.use_count());
   runtime.execute_task(init_value, c, wd_x);
   
   std::vector<field_id_t> y_vec{FID_Y};

@@ -315,6 +315,8 @@ unsigned int references;
     BaseRegionImpl(void);
     
     ~BaseRegionImpl(void);
+    
+    void init_accessor_map();
   };
 
   /**
@@ -355,11 +357,15 @@ unsigned int references;
   
     void map_physical_region(context &c, Legion::PhysicalRegion &pr, Legion::RegionRequirement &rr);
   
+    void map_physical_region_inline_with_auto_unmap();
+    
     void map_physical_region_inline();
   
     void unmap_physical_region_inline();
   
     void cleanup_reference();
+    
+    void if_mapped();
   
     class iterator: public Legion::PointInDomainIterator<DIM>{
     public: 

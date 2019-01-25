@@ -165,6 +165,19 @@ namespace LegionSimplified {
     field_id_vector.clear();
   }
   
+  template <size_t DIM>
+  void BaseRegionImpl<DIM>::init_accessor_map()
+  {
+    assert(field_id_vector.size() != 0);
+    std::vector<field_id_t>::iterator it; 
+    for (it = field_id_vector.begin(); it < field_id_vector.end(); it++) {
+      DEBUG_PRINT((4, "BaseRegionImpl %p, init_accessor_map for fid %d\n", this, *it));
+      unsigned char *null_ptr = NULL;
+      accessor_map.insert(std::make_pair(*it, null_ptr));
+    }
+  }
+  
+  
   /////////////////////////////////////////////////////////////
   // Base_Region 
   /////////////////////////////////////////////////////////////
@@ -357,7 +370,7 @@ namespace LegionSimplified {
   }
   
   template <size_t DIM>
-  void Base_Region<DIM>::map_physical_region_inline()
+  void Base_Region<DIM>::map_physical_region_inline_with_auto_unmap()
   {
     if (base_region_impl->is_mapped != PR_NOT_MAPPED) {
       return;
@@ -372,6 +385,27 @@ namespace LegionSimplified {
       unsigned char *null_ptr = NULL;
       base_region_impl->accessor_map.insert(std::make_pair(*it, null_ptr));  
       base_region_impl->region->update_inline_mapping_map(*it, this);
+    }
+    base_region_impl->physical_region = ctx->runtime->map_region(ctx->ctx, req);
+    base_region_impl->domain = ctx->runtime->get_index_space_domain(ctx->ctx, req.region.get_index_space());
+    base_region_impl->is_mapped = PR_INLINE_MAPPED;
+  }
+  
+  template <size_t DIM>
+  void Base_Region<DIM>::map_physical_region_inline()
+  {
+    if (base_region_impl->is_mapped != PR_NOT_MAPPED) {
+      return;
+    }
+    DEBUG_PRINT((4, "Base_Region %p, map_physical_region_inline, BaseRegionImpl shared_ptr %p\n", this, base_region_impl.get()));
+    assert(ctx != NULL);
+    Legion::RegionRequirement req(base_region_impl->region->lr, pm, cp, base_region_impl->region->lr_parent);
+    std::vector<field_id_t>::iterator it; 
+    for (it = base_region_impl->field_id_vector.begin(); it < base_region_impl->field_id_vector.end(); it++) {
+      DEBUG_PRINT((4, "Base_Region %p, inline map for fid %d\n", this, *it));
+      req.add_field(*it);
+      unsigned char *null_ptr = NULL;
+      base_region_impl->accessor_map.insert(std::make_pair(*it, null_ptr));  
     }
     base_region_impl->physical_region = ctx->runtime->map_region(ctx->ctx, req);
     base_region_impl->domain = ctx->runtime->get_index_space_domain(ctx->ctx, req.region.get_index_space());
@@ -400,6 +434,15 @@ namespace LegionSimplified {
       DEBUG_PRINT((4, "Base_Region %p, reset tmp %p, count %ld\n", this, tmp.get(), tmp.use_count()));
       base_region_impl = nullptr;
       DEBUG_PRINT((4, "after nullptr %ld\n", tmp.use_count()));
+    }
+  }
+  
+  template <size_t DIM>
+  void Base_Region<DIM>::if_mapped()
+  { 
+    // not mapped, do inline mapping
+    if (base_region_impl->is_mapped == PR_NOT_MAPPED) {
+      map_physical_region_inline_with_auto_unmap();
     }
   }
   
@@ -466,6 +509,7 @@ namespace LegionSimplified {
   template <typename a>
   a RO_Region<DIM>::read(int fid, Legion::Point<DIM> i)
   {
+    Base_Region<DIM>::if_mapped();
     assert(this->base_region_impl->is_mapped != PR_NOT_MAPPED);
     Legion::FieldAccessor<READ_ONLY, a, DIM> *acc = get_accessor_by_fid<a>(fid);
     return (*acc)[i];
@@ -475,6 +519,7 @@ namespace LegionSimplified {
   template <typename a>
   a RO_Region<DIM>::read(Legion::Point<DIM> i)
   {
+    Base_Region<DIM>::if_mapped();
     assert(this->base_region_impl->is_mapped != PR_NOT_MAPPED);
     assert(this->base_region_impl->accessor_map.size() == 1);
     Legion::FieldAccessor<READ_ONLY, a, DIM> *acc = get_default_accessor<a>();
@@ -561,6 +606,7 @@ namespace LegionSimplified {
   template< typename a>
   void WD_Region<DIM>::write(int fid, Legion::Point<DIM> i, a x)
   {
+    Base_Region<DIM>::if_mapped();
     assert(this->base_region_impl->is_mapped != PR_NOT_MAPPED);
     Legion::FieldAccessor<WRITE_DISCARD, a, DIM> *acc = get_accessor_by_fid<a>(fid);
     (*acc)[i] = x; 
@@ -570,6 +616,7 @@ namespace LegionSimplified {
   template< typename a>
   void WD_Region<DIM>::write(Legion::Point<DIM> i, a x)
   {
+    Base_Region<DIM>::if_mapped();
     assert(this->base_region_impl->is_mapped != PR_NOT_MAPPED);
     assert(this->base_region_impl->accessor_map.size() == 1);
     Legion::FieldAccessor<WRITE_DISCARD, a, DIM> *acc = get_default_accessor<a>();
@@ -658,6 +705,7 @@ namespace LegionSimplified {
   template< typename a>
   a RW_Region<DIM>::read(int fid, Legion::Point<DIM> i)
   {
+    Base_Region<DIM>::if_mapped();
     assert(this->base_region_impl->is_mapped != PR_NOT_MAPPED);
     Legion::FieldAccessor<READ_WRITE, a, DIM> *acc = get_accessor_by_fid<a>(fid);
     return (*acc)[i];
@@ -667,6 +715,7 @@ namespace LegionSimplified {
   template< typename a>
   a RW_Region<DIM>::read(Legion::Point<DIM> i)
   {
+    Base_Region<DIM>::if_mapped();
     assert(this->base_region_impl->is_mapped != PR_NOT_MAPPED);
     assert(this->base_region_impl->accessor_map.size() == 1);
     Legion::FieldAccessor<READ_WRITE, a, DIM> *acc = get_default_accessor<a>();
@@ -677,6 +726,7 @@ namespace LegionSimplified {
   template< typename a>
   void RW_Region<DIM>::write(int fid, Legion::Point<DIM> i, a x)
   {
+    Base_Region<DIM>::if_mapped();
     assert(this->base_region_impl->is_mapped != PR_NOT_MAPPED);
     Legion::FieldAccessor<READ_WRITE, a, DIM> *acc = get_accessor_by_fid<a>(fid);
     (*acc)[i] = x; 
@@ -686,6 +736,7 @@ namespace LegionSimplified {
   template< typename a>
   void RW_Region<DIM>::write(Legion::Point<DIM> i, a x)
   {
+    Base_Region<DIM>::if_mapped();
     assert(this->base_region_impl->is_mapped != PR_NOT_MAPPED);
     assert(this->base_region_impl->accessor_map.size() == 1);
     Legion::FieldAccessor<READ_WRITE, a, DIM> *acc = get_default_accessor<a>();
