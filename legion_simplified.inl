@@ -43,12 +43,13 @@ namespace LegionSimplified {
   Region<DIM>::Region(IdxSpace<DIM> &ispace, FdSpace &fspace) : 
     ctx(ispace.ctx), idx_space(ispace), fd_space(fspace)
   {
+    DEBUG_PRINT((4, "Region constructor %p\n", this));
     lr = ctx.runtime->create_logical_region(ctx.ctx, ispace.is, fspace.fs);
     lr_parent = lr;
     const std::vector<field_id_t> &task_field_id_vec = fd_space.field_id_vec;
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
-       printf("init inline mapping map for fid %d\n", *it);
+       DEBUG_PRINT((6, "Init inline_mapping_map for fid %d\n", *it));
        Base_Region<DIM> *null_ptr = nullptr;
        inline_mapping_map.insert(std::make_pair(*it, null_ptr)); 
     }
@@ -57,7 +58,7 @@ namespace LegionSimplified {
   template <size_t DIM>
   Region<DIM>::~Region(void)
   {
-    printf("region des %p\n", this);
+    DEBUG_PRINT((4, "Region destructor %p\n", this));
     typename std::map<field_id_t, Base_Region<DIM> *>::iterator it;
     for (it = inline_mapping_map.begin(); it != inline_mapping_map.end(); it++) {
       if (it->second != nullptr) {
@@ -72,10 +73,10 @@ namespace LegionSimplified {
   void Region<DIM>:: update_inline_mapping_map(field_id_t fid, Base_Region<DIM> *new_base_region) const
   {
     typename std::map<field_id_t, Base_Region<DIM> *>::iterator it = inline_mapping_map.find(fid);
-    printf("region %p, update inline mapping map with fid %d\n", this, fid);
+    DEBUG_PRINT((6, "Region %p, update_inline_mapping_map for fid %d\n", this, fid));
     if (it != inline_mapping_map.end()) {
       if (it->second != nullptr) {
-        printf("fid %d is already mapped, let's unmap it first, and update the base_region from %p to %p \n", fid, it->second, new_base_region);
+        DEBUG_PRINT((6, "Region %p, fid %d is already mapped, let's unmap it first, and update the base_region from %p to %p \n", this, fid, it->second, new_base_region));
         Base_Region<DIM> *base_region = it->second;
         base_region->unmap_physical_region_inline();
         it->second = new_base_region;
@@ -83,7 +84,7 @@ namespace LegionSimplified {
         it->second = new_base_region;
       }
     } else {
-      printf("can not find fid %d\n", fid);
+      DEBUG_PRINT((0, "can not find fid %d\n", fid));
       assert(0);
       return;
     }
@@ -95,7 +96,7 @@ namespace LegionSimplified {
     typename std::map<field_id_t, Base_Region<DIM> *>::iterator it;
     for (it = inline_mapping_map.begin(); it != inline_mapping_map.end(); it++) {
       if (it->second == old_base_region) {
-        printf("find fid %ld, base_region %p\n", it->first, it->second);
+        DEBUG_PRINT((6, "Region %p, find fid %ld, base_region %p\n", this, it->first, it->second));
         it->second = nullptr;
       }
     }
@@ -137,7 +138,7 @@ namespace LegionSimplified {
   BaseRegionImpl<DIM>::BaseRegionImpl(void) : 
     region(nullptr), partition(nullptr), is_mapped(PR_NOT_MAPPED)
   {
-    printf("This shared_ptr %p new\n", this);
+    DEBUG_PRINT((2, "BaseRegionImpl(shared_ptr) constructor %p\n", this));
     region = nullptr;
     partition = nullptr;
     is_mapped = PR_NOT_MAPPED;
@@ -149,13 +150,13 @@ namespace LegionSimplified {
   template <size_t DIM>
   BaseRegionImpl<DIM>::~BaseRegionImpl(void)
   {
-    printf("This shared_ptr %p delete\n", this);
+    DEBUG_PRINT((2, "BaseRegionImpl(shared_ptr) destructor %p\n", this));
     region = nullptr;
     partition = nullptr;
     std::map<field_id_t, unsigned char*>::iterator it; 
     for (it = accessor_map.begin(); it != accessor_map.end(); it++) {
       if (it->second != nullptr) {
-        printf("free accessor of fid %d\n", it->first);
+        DEBUG_PRINT((4, "BaseRegionImpl %p, free accessor of fid %d\n", this, it->first));
         delete it->second;
         it->second = nullptr;
       }
@@ -173,12 +174,13 @@ namespace LegionSimplified {
   Base_Region<DIM>::Base_Region()
   {
     init_parameters();
-    printf("base constructor\n");
+    DEBUG_PRINT((4, "Base_Region empty constructor %p\n", this));
   } 
 
   template <size_t DIM>
   Base_Region<DIM>::Base_Region(const Base_Region &rhs)
   {
+    DEBUG_PRINT((8, "Base_Region copy constructor %p\n", this));
     init_parameters();
     this->ctx = rhs.ctx;
     this->base_region_impl = rhs.base_region_impl;
@@ -188,6 +190,7 @@ namespace LegionSimplified {
   template <size_t DIM>
   Base_Region<DIM>::Base_Region(Region<DIM> *r, std::vector<field_id_t> &task_field_id_vec) 
   {
+    DEBUG_PRINT((4, "Base_Region Region/field constructor %p\n", this));
     init_parameters();
     base_region_impl = std::make_shared<BaseRegionImpl<DIM>>();
     base_region_impl->region = r;
@@ -198,12 +201,12 @@ namespace LegionSimplified {
     }
     ctx = &(r->ctx);
     base_region_impl->domain = Legion::Domain(r->idx_space.rect);
-    printf("base constructor with r v\n");
   }
 
   template <size_t DIM>
   Base_Region<DIM>::Base_Region(Region<DIM> *r) 
   {
+    DEBUG_PRINT((4, "Base_Region Region constructor %p\n", this));
     init_parameters();
     base_region_impl = std::make_shared<BaseRegionImpl<DIM>>();
     base_region_impl->region = r;
@@ -211,16 +214,16 @@ namespace LegionSimplified {
     const std::vector<field_id_t> &task_field_id_vec = base_region_impl->region->fd_space.field_id_vec;
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
-       printf("base set fid %d\n", *it);
+       DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));
        base_region_impl->field_id_vector.push_back(*it); 
     }
     base_region_impl->domain = Legion::Domain(r->idx_space.rect);
-    printf("base constructor with r\n");
   }
 
   template <size_t DIM>
   Base_Region<DIM>::Base_Region(Partition<DIM> *par, std::vector<field_id_t> &task_field_id_vec)
   {
+    DEBUG_PRINT((4, "Base_Region Partition/field constructor %p\n", this));
     init_parameters();
     base_region_impl = std::make_shared<BaseRegionImpl<DIM>>();
     base_region_impl->partition = par;
@@ -228,16 +231,16 @@ namespace LegionSimplified {
     ctx = &(base_region_impl->region->ctx);
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
-       printf("base set fid %d\n", *it);
+       DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));
        base_region_impl->field_id_vector.push_back(*it); 
     }
     base_region_impl->domain = Legion::Domain(base_region_impl->region->idx_space.rect);
-    printf("base constructor with p v\n");
   }
 
   template <size_t DIM>
   Base_Region<DIM>::Base_Region(Partition<DIM> *par)
   {
+    DEBUG_PRINT((4, "Base_Region Partition constructor %p\n", this));
     init_parameters();
     base_region_impl = std::make_shared<BaseRegionImpl<DIM>>();
     base_region_impl->partition = par;
@@ -246,11 +249,10 @@ namespace LegionSimplified {
     const std::vector<field_id_t> &task_field_id_vec = base_region_impl->region->fd_space.field_id_vec;
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
-       printf("base set fid %d\n", *it);
+       DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));
        base_region_impl->field_id_vector.push_back(*it); 
     }
     base_region_impl->domain = Legion::Domain(base_region_impl->region->idx_space.rect);
-    printf("base constructor with p\n");
   }
   
   template <size_t DIM>
@@ -289,13 +291,15 @@ namespace LegionSimplified {
       base_region_impl = NULL;
     }*/
     long use_count = 0;
+    void *shared_ptr = nullptr;
     if (base_region_impl != nullptr) 
     {
       use_count = base_region_impl.use_count();
+      shared_ptr = base_region_impl.get();
     } else {
       use_count = -1;
     }
-    printf("base_region %p de-constructor, shared_ptr use count %ld\n", this, use_count);
+    DEBUG_PRINT((4, "Base_Region %p destructor, shared_ptr %p, use count %ld\n", this, shared_ptr, use_count));
   }
 
   template <size_t DIM>
@@ -313,7 +317,7 @@ namespace LegionSimplified {
     Legion::RegionRequirement req(base_region_impl->region->lr, pm, cp, base_region_impl->region->lr_parent);
     std::vector<field_id_t>::iterator it; 
     for (it = base_region_impl->field_id_vector.begin(); it < base_region_impl->field_id_vector.end(); it++) {
-      printf("base set RR fid %d\n", *it);
+      DEBUG_PRINT((4, "Base_Region %p, set RR fid %d for single launcher\n", this, *it));
       req.add_field(*it); 
     }
     return req; 
@@ -325,7 +329,7 @@ namespace LegionSimplified {
     Legion::RegionRequirement req(base_region_impl->partition->lp, 0, pm, cp, base_region_impl->region->lr);
     std::vector<field_id_t>::iterator it; 
     for (it = base_region_impl->field_id_vector.begin(); it < base_region_impl->field_id_vector.end(); it++) {
-      printf("index base set RR fid %d\n", *it);
+      DEBUG_PRINT((4, "Base_Region %p, set RR fid %d for index launcher\n", this, *it));
       req.add_field(*it); 
     }
     return req; 
@@ -337,13 +341,13 @@ namespace LegionSimplified {
     check_empty();
     init_parameters();
     base_region_impl = std::make_shared<BaseRegionImpl<DIM>>();
-    printf("This %p, map physical new base_region_impl %p\n", this, base_region_impl.get());
+    DEBUG_PRINT((4, "Base_Region %p, map_physical_region, BaseRegionImpl shared_ptr %p\n", this, base_region_impl.get()));
   
     base_region_impl->physical_region = pr;
     std::set<field_id_t>::iterator it;
     for (it = rr.privilege_fields.begin(); it != rr.privilege_fields.end(); it++) {
       base_region_impl->field_id_vector.push_back(*it);
-      printf("map_physical_region rr field %d, set acc \n", *it);
+      DEBUG_PRINT((4, "Base_Region %p, map_physical_region rr field %d, set accessor \n", this, *it));
       unsigned char *null_ptr = nullptr;
       base_region_impl->accessor_map.insert(std::make_pair(*it, null_ptr)); 
     }
@@ -358,11 +362,12 @@ namespace LegionSimplified {
     if (base_region_impl->is_mapped != PR_NOT_MAPPED) {
       return;
     }
+    DEBUG_PRINT((4, "Base_Region %p, map_physical_region_inline, BaseRegionImpl shared_ptr %p\n", this, base_region_impl.get()));
     assert(ctx != NULL);
     Legion::RegionRequirement req(base_region_impl->region->lr, pm, cp, base_region_impl->region->lr_parent);
     std::vector<field_id_t>::iterator it; 
     for (it = base_region_impl->field_id_vector.begin(); it < base_region_impl->field_id_vector.end(); it++) {
-      printf("base %p, inline map fid %d\n", this, *it);
+      DEBUG_PRINT((4, "Base_Region %p, inline map fid %d\n", this, *it));
       req.add_field(*it);
       unsigned char *null_ptr = NULL;
       base_region_impl->accessor_map.insert(std::make_pair(*it, null_ptr));  
@@ -380,7 +385,7 @@ namespace LegionSimplified {
       assert(ctx != NULL);
       ctx->runtime->unmap_region(ctx->ctx, base_region_impl->physical_region);
       base_region_impl->is_mapped = PR_NOT_MAPPED;
-      printf("base %p, unmap region\n", this);
+      DEBUG_PRINT((4, "Base_Region %p, unmap region inline\n", this));
     }
   }
   
@@ -390,11 +395,11 @@ namespace LegionSimplified {
     ctx = nullptr;
     if (base_region_impl != nullptr) {
       auto tmp = base_region_impl;
-      printf("This %p, reset base_region_impl %p, count %ld\n", this, base_region_impl.get(), base_region_impl.use_count());
+      DEBUG_PRINT((4, "Base_Region %p, reset base_region_impl %p, count %ld\n", this, base_region_impl.get(), base_region_impl.use_count()));
       base_region_impl.reset();
-      printf("This %p, reset tmp %p, count %ld\n", this, tmp.get(), tmp.use_count());
+      DEBUG_PRINT((4, "Base_Region %p, reset tmp %p, count %ld\n", this, tmp.get(), tmp.use_count()));
       base_region_impl = nullptr;
-      printf("after nullptr %ld\n", tmp.use_count());
+      DEBUG_PRINT((4, "after nullptr %ld\n", tmp.use_count()));
     }
   }
   
@@ -490,13 +495,13 @@ namespace LegionSimplified {
     typename std::map<field_id_t, unsigned char*>::iterator it = this->base_region_impl->accessor_map.find(fid);
     if (it != this->base_region_impl->accessor_map.end()) {
       if (it->second == nullptr) {
-        printf("first time create accessor for fid %d\n", fid);
+        DEBUG_PRINT((2, "RO_Region %p, first time create accessor for fid %d\n", this, fid));
         Legion::FieldAccessor<READ_ONLY, a, DIM> *acc = new Legion::FieldAccessor<READ_ONLY, a, DIM>(this->base_region_impl->physical_region, fid);
         it->second = (unsigned char*)acc;
       }
       return (Legion::FieldAccessor<READ_ONLY, a, DIM>*)(it->second);
     } else {
-      printf("can not find accessor of fid %d\n", fid);
+      DEBUG_PRINT((0, "RO_Region %p, can not find accessor of fid %d\n", this, fid));
       assert(0);
       return nullptr;
     }
@@ -585,13 +590,13 @@ namespace LegionSimplified {
     typename std::map<field_id_t, unsigned char*>::iterator it = this->base_region_impl->accessor_map.find(fid);
     if (it != this->base_region_impl->accessor_map.end()) {
       if (it->second == nullptr) {
-        printf("first time create accessor for fid %d\n", fid);
+        DEBUG_PRINT((2, "WD_Region %p, first time create accessor for fid %d\n", this, fid));
         Legion::FieldAccessor<WRITE_DISCARD, a, DIM> *acc = new Legion::FieldAccessor<WRITE_DISCARD, a, DIM>(this->base_region_impl->physical_region, fid);
         it->second = (unsigned char*)acc;
       }
       return (Legion::FieldAccessor<WRITE_DISCARD, a, DIM>*)(it->second);
     } else {
-      printf("can not find accessor of fid %d\n", fid);
+      DEBUG_PRINT((0, "WD_Region %p, can not find accessor of fid %d\n", this, fid));
       assert(0);
       return nullptr;
     }
@@ -701,13 +706,13 @@ namespace LegionSimplified {
     typename std::map<field_id_t, unsigned char*>::iterator it = this->base_region_impl->accessor_map.find(fid);
     if (it != this->base_region_impl->accessor_map.end()) {
       if (it->second == nullptr) {
-        printf("first time create accessor for fid %d\n", fid);
+        DEBUG_PRINT((2, "RW_Region %p, first time create accessor for fid %d\n", this, fid));
         Legion::FieldAccessor<READ_WRITE, a, DIM> *acc = new Legion::FieldAccessor<READ_WRITE, a, DIM>(this->base_region_impl->physical_region, fid);
         it->second = (unsigned char*)acc;
       }
       return (Legion::FieldAccessor<READ_WRITE, a, DIM>*)(it->second);
     } else {
-      printf("can not find accessor of fid %d\n", fid);
+      DEBUG_PRINT((0, "RW_Region %p, can not find accessor of fid %d\n", this, fid));
       assert(0);
       return nullptr;
     }

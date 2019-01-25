@@ -15,9 +15,17 @@
 #define PR_INLINE_MAPPED  1
 #define PR_TASK_MAPPED    2
 
-#define VERBOSE_PRINT     1
+#define VERBOSE_PRINT     6
+
+#define DEBUG_OUTPUT      1
 
 namespace LegionSimplified { 
+  
+#ifdef DEBUG_OUTPUT
+# define DEBUG_PRINT(x) debug_printf x
+#else
+# define DEBUG_PRINT(x)
+#endif
   
   enum partition_type
   {

@@ -37,8 +37,8 @@ namespace LegionSimplified {
   //----------------------------------public-------------------------------------
   UserTask::UserTask(const char* name="default") : task_name(name)
   {
-    id = globalId++; // still not sure about this
-    printf("task id %u\n", id);
+    id = globalId++;
+    DEBUG_PRINT((2, "Create new user task name: %s, id %u\n", name, id));
   }
   
   UserTask::~UserTask(void)
@@ -65,7 +65,7 @@ namespace LegionSimplified {
     if (it != user_task_map.end()) {
       return &(it->second);
     } else {
-      printf("can not find task %p\n", (void*)func_ptr);
+      DEBUG_PRINT((0, "can not find task %p\n", (void*)func_ptr));
       return NULL;
     }
   }
