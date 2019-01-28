@@ -81,7 +81,6 @@ namespace LegionSimplified {
   public:
     const context &ctx;
     Legion::IndexSpace is;
-    Rect<DIM> rect;
   
   public:  
     IdxSpace(const context& c, Point<DIM> p);
@@ -122,7 +121,7 @@ namespace LegionSimplified {
   class Region {
   public:
     const context &ctx;
-    const FdSpace &fd_space;
+    const std::vector<field_id_t> &field_id_vec;
     Legion::LogicalRegion lr; 
     Legion::LogicalRegion lr_parent;
     mutable std::map<field_id_t, Base_Region<DIM> *> inline_mapping_map;
@@ -157,7 +156,9 @@ namespace LegionSimplified {
   
     ~Partition(void);
     
-   // Region<DIM> get_subregion_by_color(int color);
+    Region<DIM> get_subregion_by_color(int color);
+    
+    Region<DIM> operator[] (int color);
   };
 
   /**
