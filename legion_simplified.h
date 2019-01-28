@@ -122,7 +122,6 @@ namespace LegionSimplified {
   class Region {
   public:
     const context &ctx;
-    const IdxSpace<DIM> &idx_space; // for partition
     const FdSpace &fd_space;
     Legion::LogicalRegion lr; 
     Legion::LogicalRegion lr_parent;
@@ -157,6 +156,8 @@ namespace LegionSimplified {
     Partition(int p_type, Region<DIM> &r, IdxSpace<DIM> &ispace, Legion::DomainTransform &dt, Rect<DIM> &rect);
   
     ~Partition(void);
+    
+   // Region<DIM> get_subregion_by_color(int color);
   };
 
   /**

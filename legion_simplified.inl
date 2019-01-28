@@ -41,7 +41,7 @@ namespace LegionSimplified {
   //----------------------------------public-------------------------------------
   template <size_t DIM>
   Region<DIM>::Region(IdxSpace<DIM> &ispace, FdSpace &fspace) : 
-    ctx(ispace.ctx), idx_space(ispace), fd_space(fspace)
+    ctx(fspace.ctx), fd_space(fspace)
   {
     DEBUG_PRINT((4, "Region constructor %p\n", this));
     lr = ctx.runtime->create_logical_region(ctx.ctx, ispace.is, fspace.fs);
@@ -111,7 +111,7 @@ namespace LegionSimplified {
   Partition<DIM>::Partition(int p_type, Region<DIM> &r, IdxSpace<DIM> &ispace) : 
     ctx(r.ctx), region(r)
   {
-    ip = ctx.runtime->create_equal_partition(ctx.ctx, r.idx_space.is, ispace.is);
+    ip = ctx.runtime->create_equal_partition(ctx.ctx, r.lr.get_index_space(), ispace.is);
     lp = ctx.runtime->get_logical_partition(ctx.ctx, r.lr, ip);
   }
   
@@ -120,7 +120,7 @@ namespace LegionSimplified {
     Legion::DomainTransform &dt, Rect<DIM> &rect) : 
     ctx(r.ctx), region(r)
   {
-    ip = ctx.runtime->create_partition_by_restriction(ctx.ctx, r.idx_space.is, ispace.is, dt, rect);
+    ip = ctx.runtime->create_partition_by_restriction(ctx.ctx, r.lr.get_index_space(), ispace.is, dt, rect);
     lp = ctx.runtime->get_logical_partition(ctx.ctx, r.lr, ip);
   }
   
@@ -128,6 +128,14 @@ namespace LegionSimplified {
   Partition<DIM>::~Partition(void)
   {
   }
+  
+  /*
+  template <size_t DIM>
+  Region<DIM> Partition<DIM>::get_subregion_by_color(int color)
+  {
+    Legion::LogicalRegion sub_lr = ctx.runtime->get_logical_subregion_by_color(ctx.ctx, region.lr, color);
+  }
+  */
   
   /////////////////////////////////////////////////////////////
   // BaseRegionImpl
@@ -213,7 +221,7 @@ namespace LegionSimplified {
        base_region_impl->field_id_vector.push_back(*it); 
     }
     ctx = &(r->ctx);
-    base_region_impl->domain = Legion::Domain(r->idx_space.rect);
+    base_region_impl->domain = ctx->runtime->get_index_space_domain(ctx->ctx, base_region_impl->region->lr.get_index_space());
   }
 
   template <size_t DIM>
@@ -230,7 +238,7 @@ namespace LegionSimplified {
        DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));
        base_region_impl->field_id_vector.push_back(*it); 
     }
-    base_region_impl->domain = Legion::Domain(r->idx_space.rect);
+    base_region_impl->domain = ctx->runtime->get_index_space_domain(ctx->ctx, base_region_impl->region->lr.get_index_space());
   }
 
   template <size_t DIM>
@@ -247,7 +255,7 @@ namespace LegionSimplified {
        DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));
        base_region_impl->field_id_vector.push_back(*it); 
     }
-    base_region_impl->domain = Legion::Domain(base_region_impl->region->idx_space.rect);
+    base_region_impl->domain = ctx->runtime->get_index_space_domain(ctx->ctx, base_region_impl->region->lr.get_index_space());
   }
 
   template <size_t DIM>
@@ -265,7 +273,7 @@ namespace LegionSimplified {
        DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));
        base_region_impl->field_id_vector.push_back(*it); 
     }
-    base_region_impl->domain = Legion::Domain(base_region_impl->region->idx_space.rect);
+    base_region_impl->domain = ctx->runtime->get_index_space_domain(ctx->ctx, base_region_impl->region->lr.get_index_space());
   }
   
   template <size_t DIM>

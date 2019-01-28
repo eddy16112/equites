@@ -29,19 +29,19 @@ void top_level(context c)
     rw_xy.write<float>(FID_Y, *pir, 2);
   }
   
-  for (RW_Region<1>::iterator pir(rw_xy); pir(); pir++) {
-    float x = rw_xy.read<float>(FID_X, *pir);
-    float y = rw_xy.read<float>(FID_Y, *pir);
-    wd_z.write<float>(FID_Z, *pir, x * alpha + y);
+  for (auto pir : rw_xy) {
+    float x = rw_xy.read<float>(FID_X, pir);
+    float y = rw_xy.read<float>(FID_Y, pir);
+    wd_z.write<float>(FID_Z, pir, x * alpha + y);
   }
   
   //wd_z.unmap_physical_region_inline();
   auto ro_z = RO_Region<1>(&output_lr);
   
-  for (RO_Region<1>::iterator pir(ro_z); pir(); pir++) {
-    float x = rw_xy.read<float>(FID_X, *pir);
-    float y = rw_xy.read<float>(FID_Y, *pir);
-    float z = ro_z.read<float>(FID_Z, *pir);
+  for (auto pir : ro_z) {
+    float x = rw_xy.read<float>(FID_X, pir);
+    float y = rw_xy.read<float>(FID_Y, pir);
+    float z = ro_z.read<float>(FID_Z, pir);
     printf("x %f, y %f, z %f\n", x, y, z);
   }
 }
