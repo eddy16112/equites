@@ -277,7 +277,7 @@ namespace LegionSimplified {
     base_region_impl->lp = par->lp;
     base_region_impl->lr_parent = par->region_parent.lr;
     ctx = &(par->ctx);
-    const std::vector<field_id_t> &task_field_id_vec = par->region.field_id_vec;
+    const std::vector<field_id_t> &task_field_id_vec = par->region_parent.field_id_vec;
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));
