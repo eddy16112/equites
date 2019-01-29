@@ -337,17 +337,17 @@ unsigned int references;
     const static legion_coherence_property_t cp = EXCLUSIVE; 
   
   public:
-    Base_Region();
+    Base_Region(void);
   
     Base_Region(const Base_Region &rhs);
   
-    Base_Region(Region<DIM> *r, std::vector<field_id_t> &task_field_id_vec);
+    Base_Region(Region<DIM> &r, std::vector<field_id_t> &task_field_id_vec);
   
-    Base_Region(Region<DIM> *r);
+    Base_Region(Region<DIM> &r);
   
-    Base_Region(Partition<DIM> *par, std::vector<field_id_t> &task_field_id_vec);
+    Base_Region(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec);
   
-    Base_Region(Partition<DIM> *par);
+    Base_Region(Partition<DIM> &par);
   
     ~Base_Region(void);
   
@@ -431,13 +431,13 @@ unsigned int references;
   public:
     RO_Region(void);
 
-    RO_Region(Region<DIM> *r, std::vector<field_id_t> &task_field_id_vec);
+    RO_Region(Region<DIM> &r, std::vector<field_id_t> &task_field_id_vec);
   
-    RO_Region(Region<DIM> *r);
+    RO_Region(Region<DIM> &r);
   
-    RO_Region(Partition<DIM> *par, std::vector<field_id_t> &task_field_id_vec);
+    RO_Region(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec);
   
-    RO_Region(Partition<DIM> *par);
+    RO_Region(Partition<DIM> &par);
   
     ~RO_Region(void);
 
@@ -466,13 +466,13 @@ unsigned int references;
   public:      
     WD_Region(void);
 
-    WD_Region(Region<DIM> *r, std::vector<field_id_t> &task_field_id_vec);
+    WD_Region(Region<DIM> &r, std::vector<field_id_t> &task_field_id_vec);
   
-    WD_Region(Region<DIM> *r);
+    WD_Region(Region<DIM> &r);
   
-    WD_Region(Partition<DIM> *par, std::vector<field_id_t> &task_field_id_vec);
+    WD_Region(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec);
   
-    WD_Region(Partition<DIM> *par);
+    WD_Region(Partition<DIM> &par);
   
     ~WD_Region(void);
     
@@ -501,13 +501,13 @@ unsigned int references;
   public:  
     RW_Region(void);
 
-    RW_Region(Region<DIM> *r, std::vector<field_id_t> &task_field_id_vec);
+    RW_Region(Region<DIM> &r, std::vector<field_id_t> &task_field_id_vec);
   
-    RW_Region(Region<DIM> *r);
+    RW_Region(Region<DIM> &r);
   
-    RW_Region(Partition<DIM> *par, std::vector<field_id_t> &task_field_id_vec);
+    RW_Region(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec);
     
-    RW_Region(Partition<DIM> *par);
+    RW_Region(Partition<DIM> &par);
   
     ~RW_Region(void);
     

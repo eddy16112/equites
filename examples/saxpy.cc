@@ -91,22 +91,22 @@ void top_level(context c)
   Region<1> output_lr(ispace, output_fs);
   
   std::vector<field_id_t> x_vec{FID_X};
-  auto wd_x = WD_Region<1>(&input_lr, x_vec);
+  auto wd_x = WD_Region<1>(input_lr, x_vec);
   //auto tmp = wd_x;
   //printf("count %ld, tmp count %d\n", wd_x.base_region_impl.use_count(), tmp.base_region_impl.use_count());
   runtime.execute_task(init_value, c, wd_x);
   
   std::vector<field_id_t> y_vec{FID_Y};
-  auto wd_y = WD_Region<1>(&input_lr, y_vec);
+  auto wd_y = WD_Region<1>(input_lr, y_vec);
   runtime.execute_task(init_value, c, wd_y);
   
   float alpha = 2;
-  auto rw_xy = RO_Region<1>(&input_lr);
-  auto wd_z = WD_Region<1>(&output_lr);
+  auto rw_xy = RO_Region<1>(input_lr);
+  auto wd_z = WD_Region<1>(output_lr);
   runtime.execute_task(saxpy, c, alpha, rw_xy, wd_z);
   
-  auto ro_xy = RO_Region<1>(&input_lr);
-  auto ro_z = RO_Region<1>(&output_lr);
+  auto ro_xy = RO_Region<1>(input_lr);
+  auto ro_z = RO_Region<1>(output_lr);
   runtime.execute_task(check, c, alpha, ro_xy, ro_z);
  
  // call((print<float,1>), r);

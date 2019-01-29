@@ -63,13 +63,6 @@ void check(context c, float alpha, RO_Region<1> region_xy, RO_Region<1> region_z
   printf("Success\n");
 }
 
-void daxpy_task(const Legion::Task *task,
-                const std::vector<Legion::PhysicalRegion> &regions,
-                Legion::Context ctx, Legion::Runtime *runtime)
-{
-  printf("inside daxpy_task\n");
-}
-
 void top_level(context c)
 { 
   IdxSpace<1> ispace(c, 12);
@@ -89,12 +82,12 @@ void top_level(context c)
   Partition<1> output_lp(equal, output_lr, color_is);
   
   std::vector<field_id_t> x_vec{FID_X};
-  auto wd_x = WD_Region<1>(&input_lp, x_vec);
+  auto wd_x = WD_Region<1>(input_lp, x_vec);
   //printf("wd_x1 shared_ptr %p, use_count %ld\n", wd_x.base_region_impl.get(), wd_x.base_region_impl.use_count());
   runtime.execute_task(init_value, c, color_is, wd_x);
   
   std::vector<field_id_t> y_vec{FID_Y};
-  auto wd_y = WD_Region<1>(&input_lp, y_vec);
+  auto wd_y = WD_Region<1>(input_lp, y_vec);
   runtime.execute_task(init_value, c, color_is, wd_y);
 
   float alpha = 2;
@@ -103,48 +96,15 @@ void top_level(context c)
     //Region<1> subregion_z = output_lp.get_subregion_by_color(i);
     Region<1> subregion_xy = input_lp[i];
     Region<1> subregion_z = output_lp[i];
-    auto rw_subregion_xy = RO_Region<1>(&subregion_xy);
-    auto wd_subregion_z = WD_Region<1>(&subregion_z);
+    auto rw_subregion_xy = RO_Region<1>(subregion_xy);
+    auto wd_subregion_z = WD_Region<1>(subregion_z);
     runtime.execute_task(saxpy, c, alpha, rw_subregion_xy, wd_subregion_z);
-  /*  for(auto pir : rw_subregion_xy) {
-      float x = rw_subregion_xy.read<float>(FID_X, pir);
-      float y = rw_subregion_xy.read<float>(FID_Y, pir);
-      float z = wd_subregion_z.read<float>(FID_Z, pir);
-      printf("x %f, y %f\n", x, y);
-    }*/
-    /*
-    Legion::LogicalRegion sub_input_lr = c.runtime->get_logical_subregion_by_color(c.ctx, input_lp.lp, i);
-    Legion::LogicalRegion sub_output_lr = c.runtime->get_logical_subregion_by_color(c.ctx, output_lp.lp, i);
-    Legion::TaskLauncher daxpy_launcher(10, Legion::TaskArgument(&alpha, sizeof(alpha)));
-    daxpy_launcher.add_region_requirement(
-        Legion::RegionRequirement(sub_input_lr, READ_ONLY, EXCLUSIVE, input_lr.lr_parent));
-    daxpy_launcher.region_requirements[0].add_field(FID_X);
-    daxpy_launcher.region_requirements[0].add_field(FID_Y);
-    daxpy_launcher.add_region_requirement(
-        Legion::RegionRequirement(sub_output_lr, WRITE_DISCARD, EXCLUSIVE, output_lr.lr_parent));
-    daxpy_launcher.region_requirements[1].add_field(FID_Z);
-    c.runtime->execute_task(c.ctx, daxpy_launcher);
-    */
-    
   }
 
   
-  auto ro_xy_all = RO_Region<1>(&input_lr);
-  auto ro_z_all = RO_Region<1>(&output_lr);
+  auto ro_xy_all = RO_Region<1>(input_lr);
+  auto ro_z_all = RO_Region<1>(output_lr);
   runtime.execute_task(check, c, alpha, ro_xy_all, ro_z_all);
-  
-  /*
-  for(auto pir : ro_xy_all) {
-    float x = ro_xy_all.read<float>(FID_X, pir);
-    float y = ro_xy_all.read<float>(FID_Y, pir);
-    float z = ro_z_all.read<float>(FID_Z, pir);
-    if (z != x*alpha + y) {
-      printf("failed\n");
-      assert(0);
-    }
-  }
-  printf("Success\n");
-  */
   
   
 }
@@ -153,14 +113,6 @@ int main(int argc, char** argv){
   runtime.register_task<decltype(&top_level), top_level>("top_level");
   runtime.register_task<decltype(&saxpy), saxpy>("saxpy");
   runtime.register_task<decltype(&check), check>("check");
-  runtime.register_task<decltype(&init_value), init_value>("init_value");
-  
-  {
-    Legion::TaskVariantRegistrar registrar(10, "daxpy");
-    registrar.add_constraint(Legion::ProcessorConstraint(Legion::Processor::LOC_PROC));
-    registrar.set_leaf();
-    Legion::Runtime::preregister_task_variant<daxpy_task>(registrar, "daxpy");
-  }
-  
+  runtime.register_task<decltype(&init_value), init_value>("init_value");  
   runtime.start(top_level, argc, argv);
 }

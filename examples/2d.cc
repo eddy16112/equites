@@ -46,10 +46,10 @@ void top_level(context c)
   input_fs.add_field<float>(FID_Y);
   Region<2> input_lr(ispace, input_fs);
   
-  auto wd_xy = WD_Region<2>(&input_lr);
+  auto wd_xy = WD_Region<2>(input_lr);
   runtime.execute_task(init_value, c, wd_xy);
   
-  auto ro_xy = RO_Region<2>(&input_lr);
+  auto ro_xy = RO_Region<2>(input_lr);
   runtime.execute_task(print_value, c, ro_xy);
   
  // call((print<float,1>), r);

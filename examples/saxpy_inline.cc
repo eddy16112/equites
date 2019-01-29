@@ -21,8 +21,8 @@ void top_level(context c)
   Region<1> output_lr(ispace, output_fs);
   
   float alpha = 2;
-  auto rw_xy = RW_Region<1>(&input_lr);
-  auto wd_z = WD_Region<1>(&output_lr);
+  auto rw_xy = RW_Region<1>(input_lr);
+  auto wd_z = WD_Region<1>(output_lr);
   
   rw_xy.map_physical_region_inline();
   wd_z.map_physical_region_inline();
@@ -39,7 +39,7 @@ void top_level(context c)
   wd_z.unmap_physical_region_inline();
   
   
-  auto ro_z = RO_Region<1>(&output_lr);
+  auto ro_z = RO_Region<1>(output_lr);
   
   ro_z.map_physical_region_inline();
   for (auto pir : ro_z) {

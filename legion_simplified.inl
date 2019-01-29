@@ -200,7 +200,7 @@ namespace LegionSimplified {
   
   //----------------------------------public-------------------------------------
   template <size_t DIM>
-  Base_Region<DIM>::Base_Region()
+  Base_Region<DIM>::Base_Region(void)
   {
     init_parameters();
     DEBUG_PRINT((4, "Base_Region empty constructor %p\n", this));
@@ -217,32 +217,32 @@ namespace LegionSimplified {
   }
 
   template <size_t DIM>
-  Base_Region<DIM>::Base_Region(Region<DIM> *r, std::vector<field_id_t> &task_field_id_vec) 
+  Base_Region<DIM>::Base_Region(Region<DIM> &r, std::vector<field_id_t> &task_field_id_vec) 
   {
     DEBUG_PRINT((4, "Base_Region Region/field constructor %p\n", this));
     init_parameters();
     base_region_impl = std::make_shared<BaseRegionImpl<DIM>>();
-    base_region_impl->lr = r->lr;
-    base_region_impl->lr_parent = r->lr_parent;
+    base_region_impl->lr = r.lr;
+    base_region_impl->lr_parent = r.lr_parent;
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        printf("base set fid %d\n", *it);
        base_region_impl->field_id_vector.push_back(*it); 
     }
-    ctx = &(r->ctx);
+    ctx = &(r.ctx);
     base_region_impl->domain = ctx->runtime->get_index_space_domain(ctx->ctx, base_region_impl->lr.get_index_space());
   }
 
   template <size_t DIM>
-  Base_Region<DIM>::Base_Region(Region<DIM> *r) 
+  Base_Region<DIM>::Base_Region(Region<DIM> &r) 
   {
     DEBUG_PRINT((4, "Base_Region Region constructor %p\n", this));
     init_parameters();
     base_region_impl = std::make_shared<BaseRegionImpl<DIM>>();
-    base_region_impl->lr = r->lr;
-    base_region_impl->lr_parent = r->lr_parent;
-    ctx = &(r->ctx);
-    const std::vector<field_id_t> &task_field_id_vec = r->field_id_vec;
+    base_region_impl->lr = r.lr;
+    base_region_impl->lr_parent = r.lr_parent;
+    ctx = &(r.ctx);
+    const std::vector<field_id_t> &task_field_id_vec = r.field_id_vec;
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));
@@ -252,14 +252,14 @@ namespace LegionSimplified {
   }
 
   template <size_t DIM>
-  Base_Region<DIM>::Base_Region(Partition<DIM> *par, std::vector<field_id_t> &task_field_id_vec)
+  Base_Region<DIM>::Base_Region(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec)
   {
     DEBUG_PRINT((4, "Base_Region Partition/field constructor %p\n", this));
     init_parameters();
     base_region_impl = std::make_shared<BaseRegionImpl<DIM>>();
-    base_region_impl->lp = par->lp;
-    base_region_impl->lr_parent = par->region_parent.lr;
-    ctx = &(par->ctx);
+    base_region_impl->lp = par.lp;
+    base_region_impl->lr_parent = par.region_parent.lr;
+    ctx = &(par.ctx);
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));
@@ -269,15 +269,15 @@ namespace LegionSimplified {
   }
 
   template <size_t DIM>
-  Base_Region<DIM>::Base_Region(Partition<DIM> *par)
+  Base_Region<DIM>::Base_Region(Partition<DIM> &par)
   {
     DEBUG_PRINT((4, "Base_Region Partition constructor %p\n", this));
     init_parameters();
     base_region_impl = std::make_shared<BaseRegionImpl<DIM>>();
-    base_region_impl->lp = par->lp;
-    base_region_impl->lr_parent = par->region_parent.lr;
-    ctx = &(par->ctx);
-    const std::vector<field_id_t> &task_field_id_vec = par->region_parent.field_id_vec;
+    base_region_impl->lp = par.lp;
+    base_region_impl->lr_parent = par.region_parent.lr;
+    ctx = &(par.ctx);
+    const std::vector<field_id_t> &task_field_id_vec = par.region_parent.field_id_vec;
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));
@@ -492,28 +492,28 @@ namespace LegionSimplified {
   }
   
   template <size_t DIM>
-  RO_Region<DIM>::RO_Region(Region<DIM> *r, std::vector<field_id_t> &task_field_id_vec) 
+  RO_Region<DIM>::RO_Region(Region<DIM> &r, std::vector<field_id_t> &task_field_id_vec) 
     : Base_Region<DIM>(r, task_field_id_vec)
   {
     init_ro_parameters();
   }
 
   template <size_t DIM>
-  RO_Region<DIM>::RO_Region(Region<DIM> *r) 
+  RO_Region<DIM>::RO_Region(Region<DIM> &r) 
     : Base_Region<DIM>(r)
   {
     init_ro_parameters();
   }
 
   template <size_t DIM>
-  RO_Region<DIM>::RO_Region(Partition<DIM> *par, std::vector<field_id_t> &task_field_id_vec) 
+  RO_Region<DIM>::RO_Region(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec) 
     : Base_Region<DIM>(par, task_field_id_vec)
   {
     init_ro_parameters();
   }
 
   template <size_t DIM>
-  RO_Region<DIM>::RO_Region(Partition<DIM> *par) 
+  RO_Region<DIM>::RO_Region(Partition<DIM> &par) 
     : Base_Region<DIM>(par)
   {
     init_ro_parameters();
@@ -590,27 +590,27 @@ namespace LegionSimplified {
   }
 
   template <size_t DIM>
-  WD_Region<DIM>::WD_Region(Region<DIM> *r, std::vector<field_id_t> &task_field_id_vec) 
+  WD_Region<DIM>::WD_Region(Region<DIM> &r, std::vector<field_id_t> &task_field_id_vec) 
     : Base_Region<DIM>(r, task_field_id_vec)
   {
     init_wd_parameters();
   }
 
   template <size_t DIM>
-  WD_Region<DIM>::WD_Region(Region<DIM> *r) : Base_Region<DIM>(r)
+  WD_Region<DIM>::WD_Region(Region<DIM> &r) : Base_Region<DIM>(r)
   {
     init_wd_parameters();
   }
 
   template <size_t DIM>
-  WD_Region<DIM>::WD_Region(Partition<DIM> *par, std::vector<field_id_t> &task_field_id_vec) 
+  WD_Region<DIM>::WD_Region(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec) 
     : Base_Region<DIM>(par, task_field_id_vec)
   {
     init_wd_parameters();
   }
 
   template <size_t DIM>
-  WD_Region<DIM>::WD_Region(Partition<DIM> *par) 
+  WD_Region<DIM>::WD_Region(Partition<DIM> &par) 
     : Base_Region<DIM>(par)
   {
     init_wd_parameters();
@@ -688,28 +688,28 @@ namespace LegionSimplified {
   }
 
   template <size_t DIM>
-  RW_Region<DIM>::RW_Region(Region<DIM> *r, std::vector<field_id_t> &task_field_id_vec) 
+  RW_Region<DIM>::RW_Region(Region<DIM> &r, std::vector<field_id_t> &task_field_id_vec) 
     : Base_Region<DIM>(r, task_field_id_vec)
   {
     init_rw_parameters();
   }
 
   template <size_t DIM>
-  RW_Region<DIM>::RW_Region(Region<DIM> *r) 
+  RW_Region<DIM>::RW_Region(Region<DIM> &r) 
     : Base_Region<DIM>(r)
   {
     init_rw_parameters();
   }
 
   template <size_t DIM>
-  RW_Region<DIM>::RW_Region(Partition<DIM> *par, std::vector<field_id_t> &task_field_id_vec) 
+  RW_Region<DIM>::RW_Region(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec) 
     : Base_Region<DIM>(par, task_field_id_vec)
   {
     init_rw_parameters();
   }
 
   template <size_t DIM>
-  RW_Region<DIM>::RW_Region(Partition<DIM> *par) 
+  RW_Region<DIM>::RW_Region(Partition<DIM> &par) 
     : Base_Region<DIM>(par)
   {
     init_rw_parameters();
