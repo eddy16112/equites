@@ -124,7 +124,6 @@ namespace LegionSimplified {
     const std::vector<field_id_t> &field_id_vec;
     Legion::LogicalRegion lr; 
     Legion::LogicalRegion lr_parent;
-    mutable std::map<field_id_t, Base_Region<DIM> *> inline_mapping_map;
   
   public:
     Region(IdxSpace<DIM> &ispace, FdSpace &fspace);
@@ -145,7 +144,7 @@ namespace LegionSimplified {
   class Partition {
   public:
     const context &ctx;
-    const Region<DIM> &region;
+    const Region<DIM> &region_parent;
     Legion::IndexPartition ip;
     Legion::LogicalPartition lp;
   
@@ -305,8 +304,9 @@ unsigned int references;
   template <size_t DIM>
   class BaseRegionImpl {
   public:
-    const Region<DIM> *region;
-    const Partition<DIM> *partition;
+    Legion::LogicalRegion lr;  // mutually exclusive with lp
+    Legion::LogicalPartition lp; // mutually exclusive with lr
+    Legion::LogicalRegion lr_parent;
     int is_mapped;
     Legion::Domain domain;
     Legion::PhysicalRegion physical_region;
