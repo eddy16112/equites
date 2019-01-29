@@ -373,6 +373,8 @@ namespace LegionSimplified {
     base_region_impl = std::make_shared<BaseRegionImpl<DIM>>();
     DEBUG_PRINT((4, "Base_Region %p, map_physical_region, BaseRegionImpl shared_ptr %p\n", this, base_region_impl.get()));
   
+    base_region_impl->lr = pr.get_logical_region();
+    base_region_impl->lr_parent = rr.parent;
     base_region_impl->physical_region = pr;
     std::set<field_id_t>::iterator it;
     for (it = rr.privilege_fields.begin(); it != rr.privilege_fields.end(); it++) {
