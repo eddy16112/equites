@@ -182,7 +182,7 @@ namespace LegionSimplified {
   }
   
   template <size_t DIM>
-  void BaseRegionImpl<DIM>::init_accessor_map()
+  void BaseRegionImpl<DIM>::init_accessor_map(void)
   {
     assert(field_id_vector.size() != 0);
     std::vector<field_id_t>::iterator it; 
@@ -342,7 +342,7 @@ namespace LegionSimplified {
   }
   
   template <size_t DIM>
-  Legion::RegionRequirement Base_Region<DIM>::set_region_requirement_single()
+  Legion::RegionRequirement Base_Region<DIM>::set_region_requirement_single(void)
   {
     Legion::RegionRequirement req(base_region_impl->lr, pm, cp, base_region_impl->lr_parent);
     std::vector<field_id_t>::iterator it; 
@@ -354,7 +354,7 @@ namespace LegionSimplified {
   }
 
   template <size_t DIM>
-  Legion::RegionRequirement Base_Region<DIM>::set_region_requirement_index()
+  Legion::RegionRequirement Base_Region<DIM>::set_region_requirement_index(void)
   {
     Legion::RegionRequirement req(base_region_impl->lp, 0, pm, cp, base_region_impl->lr_parent);
     std::vector<field_id_t>::iterator it; 
@@ -411,7 +411,7 @@ namespace LegionSimplified {
   }
   
   template <size_t DIM>
-  void Base_Region<DIM>::map_physical_region_inline()
+  void Base_Region<DIM>::map_physical_region_inline(void)
   {
     if (base_region_impl->is_mapped != PR_NOT_MAPPED) {
       return;
@@ -432,7 +432,7 @@ namespace LegionSimplified {
   }
   
   template <size_t DIM>
-  void Base_Region<DIM>::unmap_physical_region_inline()
+  void Base_Region<DIM>::unmap_physical_region_inline(void)
   {
     if (base_region_impl->is_mapped == PR_INLINE_MAPPED) {
       assert(ctx != NULL);
@@ -443,21 +443,21 @@ namespace LegionSimplified {
   }
   
   template <size_t DIM>
-  void Base_Region<DIM>::cleanup_reference()
+  void Base_Region<DIM>::cleanup_reference(void)
   {
     ctx = nullptr;
     if (base_region_impl != nullptr) {
-      auto tmp = base_region_impl;
+    //  auto tmp = base_region_impl;
       DEBUG_PRINT((4, "Base_Region %p, reset base_region_impl %p, count %ld\n", this, base_region_impl.get(), base_region_impl.use_count()));
       base_region_impl.reset();
-      DEBUG_PRINT((4, "Base_Region %p, reset tmp %p, count %ld\n", this, tmp.get(), tmp.use_count()));
+  //    DEBUG_PRINT((4, "Base_Region %p, reset tmp %p, count %ld\n", this, tmp.get(), tmp.use_count()));
       base_region_impl = nullptr;
-      DEBUG_PRINT((4, "after nullptr %ld\n", tmp.use_count()));
+    //  DEBUG_PRINT((4, "after nullptr %ld\n", tmp.use_count()));
     }
   }
   
   template <size_t DIM>
-  void Base_Region<DIM>::if_mapped()
+  void Base_Region<DIM>::if_mapped(void)
   { 
     // not mapped, do inline mapping
     if (base_region_impl->is_mapped == PR_NOT_MAPPED) {
@@ -467,14 +467,14 @@ namespace LegionSimplified {
   
   //----------------------------------private-------------------------------------
   template <size_t DIM>
-  void Base_Region<DIM>::init_parameters()
+  void Base_Region<DIM>::init_parameters(void)
   {
     ctx = nullptr;
     base_region_impl = nullptr;
   }
 
   template <size_t DIM>
-  void Base_Region<DIM>::check_empty()
+  void Base_Region<DIM>::check_empty(void)
   {
     assert(ctx == nullptr);
     assert(base_region_impl == nullptr);

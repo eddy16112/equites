@@ -246,7 +246,7 @@ namespace LegionSimplified {
   public:
     Legion::ArgumentMap arg_map;
   public:
-    ArgMap()
+    ArgMap(void)
     {
     }
     template<typename T, size_t DIM>
@@ -318,7 +318,7 @@ unsigned int references;
     
     ~BaseRegionImpl(void);
     
-    void init_accessor_map();
+    void init_accessor_map(void);
   };
 
   /**
@@ -353,21 +353,21 @@ unsigned int references;
   
     Base_Region & operator=(const Base_Region &rhs);
   
-    Legion::RegionRequirement set_region_requirement_single();
+    Legion::RegionRequirement set_region_requirement_single(void);
   
-    Legion::RegionRequirement set_region_requirement_index();
+    Legion::RegionRequirement set_region_requirement_index(void);
   
     void map_physical_region(context &c, Legion::PhysicalRegion &pr, Legion::RegionRequirement &rr);
   
     void map_physical_region_inline_with_auto_unmap();
     
-    void map_physical_region_inline();
+    void map_physical_region_inline(void);
   
-    void unmap_physical_region_inline();
+    void unmap_physical_region_inline(void);
   
-    void cleanup_reference();
+    void cleanup_reference(void);
     
-    void if_mapped();
+    void if_mapped(void);
   
     class iterator: public Legion::PointInDomainIterator<DIM>{
     public: 
@@ -415,9 +415,9 @@ unsigned int references;
     }
   
   private:  
-    void init_parameters();
+    void init_parameters(void);
   
-    void check_empty();
+    void check_empty(void);
     
   };
 
