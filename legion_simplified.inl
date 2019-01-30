@@ -829,7 +829,7 @@ namespace LegionSimplified {
     if (leaf == true) {
       registrar.set_leaf();
     }
-    TaskRegistration<RT, F, f>::variant(registrar); 
+    TaskRegistration<RT, F, f>::variant(registrar, task_name.c_str()); 
   }
   
   template <typename F, typename ...Args>

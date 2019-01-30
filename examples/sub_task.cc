@@ -83,7 +83,7 @@ void top_level(context c)
   auto ro_xy = RW_Region<1>(input_lr);
   runtime.execute_task(print_value, c, ro_xy);
   
- // call((print<float,1>), r);
+  printf("end top level\n");
 }
 
 int main(int argc, char** argv){

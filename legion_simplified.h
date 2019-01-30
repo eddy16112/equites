@@ -719,15 +719,15 @@ unsigned int references;
 // legion register task constraint and variant
   template <typename T, typename F, F f> 
   struct TaskRegistration {
-    static void variant(Legion::TaskVariantRegistrar r){
-      Legion::Runtime::preregister_task_variant<T, make_legion_task<F, f>>(r);
+    static void variant(const Legion::TaskVariantRegistrar &r, const char *task_name = NULL){
+      Legion::Runtime::preregister_task_variant<T, make_legion_task<F, f>>(r, task_name);
     }
   };
 
   template <typename F, F f>
   struct TaskRegistration<void, F, f> {
-    static void variant(Legion::TaskVariantRegistrar r){
-      Legion::Runtime::preregister_task_variant<make_legion_task<F, f>>(r);
+    static void variant(const Legion::TaskVariantRegistrar &r, const char *task_name = NULL){
+      Legion::Runtime::preregister_task_variant<make_legion_task<F, f>>(r, task_name);
     }
   };
 
