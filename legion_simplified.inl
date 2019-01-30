@@ -820,12 +820,15 @@ namespace LegionSimplified {
   
   //----------------------------------public-------------------------------------
   template <typename F, F f>
-  void UserTask::register_task(void)
+  void UserTask::register_task(bool leaf)
   {
     typedef typename function_traits<F>::returnType RT; 
     Legion::ProcessorConstraint pc = Legion::ProcessorConstraint(Legion::Processor::LOC_PROC);
     Legion::TaskVariantRegistrar registrar(id, task_name.c_str());
     registrar.add_constraint(pc);
+    if (leaf == true) {
+      registrar.set_leaf();
+    }
     TaskRegistration<RT, F, f>::variant(registrar); 
   }
   
@@ -879,7 +882,15 @@ namespace LegionSimplified {
   void TaskRuntime::register_task(const char* name)
   {
     UserTask new_task(name);
-    new_task.register_task<F, func_ptr>();
+    new_task.register_task<F, func_ptr>(false);
+    user_task_map.insert(std::make_pair((uintptr_t)func_ptr, new_task)); 
+  }
+  
+  template <typename F, F func_ptr>
+  void TaskRuntime::register_task(const char* name, bool leaf)
+  {
+    UserTask new_task(name);
+    new_task.register_task<F, func_ptr>(leaf);
     user_task_map.insert(std::make_pair((uintptr_t)func_ptr, new_task)); 
   }
 

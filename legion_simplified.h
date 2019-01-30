@@ -748,7 +748,7 @@ unsigned int references;
     
     // register task constraints
     template <typename F, F f>
-    void register_task(void);
+    void register_task(bool leaf);
     
     // launch single task
     template <typename F, typename ...Args>
@@ -794,6 +794,10 @@ unsigned int references;
     // register tasks 
     template <typename F, F func_ptr>
     void register_task(const char* name);
+    
+    // register tasks 
+    template <typename F, F func_ptr>
+    void register_task(const char* name, bool leaf);
   
     // start runtime
     template <typename F>

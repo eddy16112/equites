@@ -114,8 +114,8 @@ void top_level(context c)
 
 int main(int argc, char** argv){
   runtime.register_task<decltype(&top_level), top_level>("top_level");
-  runtime.register_task<decltype(&saxpy), saxpy>("saxpy");
-  runtime.register_task<decltype(&check), check>("check");
-  runtime.register_task<decltype(&init_value), init_value>("init_value");
+  runtime.register_task<decltype(&saxpy), saxpy>("saxpy", true);
+  runtime.register_task<decltype(&check), check>("check", true);
+  runtime.register_task<decltype(&init_value), init_value>("init_value", true);
   runtime.start(top_level, argc, argv);
 }

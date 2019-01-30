@@ -129,8 +129,8 @@ void top_level(context c)
 
 int main(int argc, char** argv){
   runtime.register_task<decltype(&top_level), top_level>("top_level");
-  runtime.register_task<decltype(&stencil_task), stencil_task>("stencil_task");
-  runtime.register_task<decltype(&check_task), check_task>("check_task");
-  runtime.register_task<decltype(&init_field_task), init_field_task>("init_field_task");
+  runtime.register_task<decltype(&stencil_task), stencil_task>("stencil_task", true);
+  runtime.register_task<decltype(&check_task), check_task>("check_task", true);
+  runtime.register_task<decltype(&init_field_task), init_field_task>("init_field_task", true);
   runtime.start(top_level, argc, argv);
 }
