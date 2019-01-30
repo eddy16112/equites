@@ -815,6 +815,93 @@ namespace LegionSimplified {
   }
   
   /////////////////////////////////////////////////////////////
+  // WD_Region
+  /////////////////////////////////////////////////////////////
+  
+  //----------------------------------public-------------------------------------
+  template <size_t DIM>
+  RO_Partition<DIM>::RO_Partition(void) : RO_Region<DIM>()
+  {
+  }
+
+  template <size_t DIM>
+  RO_Partition<DIM>::RO_Partition(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec) 
+    : RO_Region<DIM>(par, task_field_id_vec)
+  {
+    RO_Region<DIM>::init_wd_parameters();
+  }
+
+  template <size_t DIM>
+  RO_Partition<DIM>::RO_Partition(Partition<DIM> &par) 
+    : RO_Region<DIM>(par)
+  {
+    RO_Region<DIM>::init_wd_parameters();
+  }
+
+  template <size_t DIM>
+  RO_Partition<DIM>::~RO_Partition(void)
+  {
+  }
+  
+  /////////////////////////////////////////////////////////////
+  // WD_Region
+  /////////////////////////////////////////////////////////////
+  
+  //----------------------------------public-------------------------------------
+  template <size_t DIM>
+  WD_Partition<DIM>::WD_Partition(void) : WD_Region<DIM>()
+  {
+  }
+
+  template <size_t DIM>
+  WD_Partition<DIM>::WD_Partition(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec) 
+    : WD_Region<DIM>(par, task_field_id_vec)
+  {
+    WD_Region<DIM>::init_wd_parameters();
+  }
+
+  template <size_t DIM>
+  WD_Partition<DIM>::WD_Partition(Partition<DIM> &par) 
+    : WD_Region<DIM>(par)
+  {
+    WD_Region<DIM>::init_wd_parameters();
+  }
+
+  template <size_t DIM>
+  WD_Partition<DIM>::~WD_Partition(void)
+  {
+  }
+  
+  /////////////////////////////////////////////////////////////
+  // RW_Region
+  /////////////////////////////////////////////////////////////
+  
+  //----------------------------------public-------------------------------------
+  template <size_t DIM>
+  RW_Partition<DIM>::RW_Partition(void) : RW_Region<DIM>()
+  {
+  }
+
+  template <size_t DIM>
+  RW_Partition<DIM>::RW_Partition(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec) 
+    : RW_Region<DIM>(par, task_field_id_vec)
+  {
+    RW_Region<DIM>::init_wd_parameters();
+  }
+
+  template <size_t DIM>
+  RW_Partition<DIM>::RW_Partition(Partition<DIM> &par) 
+    : RW_Region<DIM>(par)
+  {
+    RW_Region<DIM>::init_wd_parameters();
+  }
+
+  template <size_t DIM>
+  RW_Partition<DIM>::~RW_Partition(void)
+  {
+  }
+  
+  /////////////////////////////////////////////////////////////
   // UserTask 
   /////////////////////////////////////////////////////////////
   

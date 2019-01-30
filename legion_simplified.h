@@ -450,10 +450,10 @@ unsigned int references;
   
     template< typename a>
     a read(Legion::Point<DIM> i);
-    
-  private:  
+     
     void init_ro_parameters(void);
   
+  private:
     template< typename a>
     Legion::FieldAccessor<READ_ONLY, a, DIM>* get_accessor_by_fid(field_id_t fid);
   
@@ -485,10 +485,10 @@ unsigned int references;
   
     template< typename a>
     void write(Legion::Point<DIM> i, a x);
-  
-  private:  
+   
     void init_wd_parameters(void);
   
+  private: 
     template< typename a>
     Legion::FieldAccessor<WRITE_DISCARD, a, DIM>* get_accessor_by_fid(field_id_t fid);
   
@@ -526,15 +526,51 @@ unsigned int references;
   
     template< typename a>
     void write(Legion::Point<DIM> i, a x);
-
-  private:  
+ 
     void init_rw_parameters(void);
-  
+
+  private:   
     template< typename a>
     Legion::FieldAccessor<READ_WRITE, a, DIM>* get_accessor_by_fid(field_id_t fid);
   
     template< typename a>
     Legion::FieldAccessor<READ_WRITE, a, DIM>* get_default_accessor(void);
+  };
+  
+  template <size_t DIM>
+  class RO_Partition : public RO_Region<DIM> {
+  public:      
+    RO_Partition(void);
+  
+    RO_Partition(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec);
+  
+    RO_Partition(Partition<DIM> &par);
+  
+    ~RO_Partition(void);
+  };
+  
+  template <size_t DIM>
+  class WD_Partition : public WD_Region<DIM> {
+  public:      
+    WD_Partition(void);
+  
+    WD_Partition(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec);
+  
+    WD_Partition(Partition<DIM> &par);
+  
+    ~WD_Partition(void);
+  };
+  
+  template <size_t DIM>
+  class RW_Partition : public RW_Region<DIM> {
+  public:      
+    RW_Partition(void);
+  
+    RW_Partition(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec);
+  
+    RW_Partition(Partition<DIM> &par);
+  
+    ~RW_Partition(void);
   };
 
 //-----------------------------------------------------------------------------

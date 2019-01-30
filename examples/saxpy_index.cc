@@ -80,12 +80,12 @@ void top_level(context c)
   Partition<1> output_lp(equal, output_lr, color_is);
   
   std::vector<field_id_t> x_vec{FID_X};
-  auto wd_x = WD_Region<1>(input_lp, x_vec);
+  auto wd_x = WD_Partition<1>(input_lp, x_vec);
   //printf("wd_x1 shared_ptr %p, use_count %ld\n", wd_x.base_region_impl.get(), wd_x.base_region_impl.use_count());
   runtime.execute_task(init_value, c, color_is, wd_x);
   
   std::vector<field_id_t> y_vec{FID_Y};
-  auto wd_y = WD_Region<1>(input_lp, y_vec);
+  auto wd_y = WD_Partition<1>(input_lp, y_vec);
   runtime.execute_task(init_value, c, color_is, wd_y);
 
   float alpha = 2;
