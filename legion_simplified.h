@@ -127,6 +127,8 @@ namespace LegionSimplified {
   
   public:
     Region(IdxSpace<DIM> &ispace, FdSpace &fspace);
+    
+    Region(const context &c, const std::vector<field_id_t> &field_id_vec, Legion::LogicalRegion &lr, Legion::LogicalRegion &lr_parent);
   
     ~Region(void);
     
@@ -368,6 +370,8 @@ unsigned int references;
     void cleanup_reference(void);
     
     void if_mapped(void);
+    
+    Region<DIM> get_region(void);
   
     class iterator: public Legion::PointInDomainIterator<DIM>{
     public: 

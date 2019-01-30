@@ -50,11 +50,19 @@ namespace LegionSimplified {
   }
   
   template <size_t DIM>
+  Region<DIM>::Region(const context &c, const std::vector<field_id_t> &field_id_vec, Legion::LogicalRegion &lr, Legion::LogicalRegion &lr_parent) :
+    ctx(c), field_id_vec(field_id_vec), lr(lr), lr_parent(lr_parent)
+  {
+    DEBUG_PRINT((4, "Region constructor all %p\n", this));
+  }
+  
+  template <size_t DIM>
   Region<DIM>::~Region(void)
   {
     DEBUG_PRINT((4, "Region destructor %p\n", this));
     // if I am the parent logical region, then destroy it.
     if (lr == lr_parent) {
+      DEBUG_PRINT((4, "Region destructor destroy lr %p\n", this));
       ctx.runtime->destroy_logical_region(ctx.ctx, lr);
     }
   }
@@ -465,6 +473,14 @@ namespace LegionSimplified {
     if (base_region_impl->is_mapped == PR_NOT_MAPPED) {
       map_physical_region_inline_with_auto_unmap();
     }
+  }
+  
+  template <size_t DIM>
+  Region<DIM> Base_Region<DIM>::get_region(void)
+  {
+    // fixme 
+    Region<DIM> region = Region<DIM>(*ctx, base_region_impl->field_id_vector, base_region_impl->lr, base_region_impl->lr_parent);
+    return region;
   }
   
   //----------------------------------private-------------------------------------
