@@ -53,6 +53,12 @@ namespace LegionSimplified {
   TaskRuntime::TaskRuntime(void)
   {
     user_task_map.clear();
+    
+    inline_map_region_vector.clear();
+    
+    inline_map_region_t empty_region;
+    assert(empty_region.is_empty() == true);
+    inline_map_region_vector.push_back(empty_region);
   }
   
   TaskRuntime::~TaskRuntime(void)
@@ -68,6 +74,21 @@ namespace LegionSimplified {
       DEBUG_PRINT((0, "can not find task %p\n", (void*)func_ptr));
       return NULL;
     }
+  }
+  
+  std::vector<inline_map_region_t>::const_iterator TaskRuntime::check_inline_map_conflict(inline_map_region_t &new_region)
+  {
+    return inline_map_region_vector.cbegin();
+  }
+  
+  void TaskRuntime::add_inline_map(inline_map_region_t &new_region)
+  {
+    inline_map_region_vector.push_back(new_region);
+  }
+  
+  void TaskRuntime::remove_inline_map(std::vector<inline_map_region_t>::const_iterator it)
+  {
+    inline_map_region_vector.erase(it);
   }
   
   void debug_printf(int verbose_level, const char *format, ...)

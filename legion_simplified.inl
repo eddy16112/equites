@@ -67,43 +67,6 @@ namespace LegionSimplified {
     }
   }
   
-  template <size_t DIM>
-  void Region<DIM>:: update_inline_mapping_map(field_id_t fid, Base_Region<DIM> *new_base_region) const
-  {
-#if 0
-    typename std::map<field_id_t, Base_Region<DIM> *>::iterator it = inline_mapping_map.find(fid);
-    DEBUG_PRINT((6, "Region %p, update_inline_mapping_map for fid %d\n", this, fid));
-    if (it != inline_mapping_map.end()) {
-      if (it->second != nullptr) {
-        DEBUG_PRINT((6, "Region %p, fid %d is already mapped, let's unmap it first, and update the base_region from %p to %p \n", this, fid, it->second, new_base_region));
-        Base_Region<DIM> *base_region = it->second;
-        base_region->unmap_physical_region_inline();
-        it->second = new_base_region;
-      } else {
-        it->second = new_base_region;
-      }
-    } else {
-      DEBUG_PRINT((0, "can not find fid %d\n", fid));
-      assert(0);
-      return;
-    }
-#endif
-  }
-  
-  template <size_t DIM>
-  void Region<DIM>:: remove_inline_mapping_map(Base_Region<DIM> *old_base_region) const
-  {
-#if 0
-    typename std::map<field_id_t, Base_Region<DIM> *>::iterator it;
-    for (it = inline_mapping_map.begin(); it != inline_mapping_map.end(); it++) {
-      if (it->second == old_base_region) {
-        DEBUG_PRINT((6, "Region %p, find fid %ld, base_region %p\n", this, it->first, it->second));
-        it->second = nullptr;
-      }
-    }
-#endif
-  }
-  
   /////////////////////////////////////////////////////////////
   // Partition
   /////////////////////////////////////////////////////////////
@@ -399,25 +362,7 @@ namespace LegionSimplified {
   template <size_t DIM>
   void Base_Region<DIM>::map_physical_region_inline_with_auto_unmap()
   {
-#if 0
-    if (base_region_impl->is_mapped != PR_NOT_MAPPED) {
-      return;
-    }
-    DEBUG_PRINT((4, "Base_Region %p, map_physical_region_inline, BaseRegionImpl shared_ptr %p\n", this, base_region_impl.get()));
-    assert(ctx != NULL);
-    Legion::RegionRequirement req(base_region_impl->region->lr, pm, cp, base_region_impl->region->lr_parent);
-    std::vector<field_id_t>::iterator it; 
-    for (it = base_region_impl->field_id_vector.begin(); it < base_region_impl->field_id_vector.end(); it++) {
-      DEBUG_PRINT((4, "Base_Region %p, inline map fid %d\n", this, *it));
-      req.add_field(*it);
-      unsigned char *null_ptr = NULL;
-      base_region_impl->accessor_map.insert(std::make_pair(*it, null_ptr));  
-      base_region_impl->region->update_inline_mapping_map(*it, this);
-    }
-    base_region_impl->physical_region = ctx->runtime->map_region(ctx->ctx, req);
-    base_region_impl->domain = ctx->runtime->get_index_space_domain(ctx->ctx, req.region.get_index_space());
-    base_region_impl->is_mapped = PR_INLINE_MAPPED;
-#endif
+    assert(0);
   }
   
   template <size_t DIM>
@@ -437,6 +382,7 @@ namespace LegionSimplified {
       base_region_impl->accessor_map.insert(std::make_pair(*it, null_ptr));  
     }
     base_region_impl->physical_region = ctx->runtime->map_region(ctx->ctx, req);
+    base_region_impl->physical_region.wait_until_valid();
     base_region_impl->domain = ctx->runtime->get_index_space_domain(ctx->ctx, req.region.get_index_space());
     base_region_impl->is_mapped = PR_INLINE_MAPPED;
   }

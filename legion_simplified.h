@@ -32,6 +32,21 @@ namespace LegionSimplified {
     equal,
     restriction,
   };
+  
+  struct inline_map_region_t {
+  public:
+    Legion::RegionRequirement rr;
+    Legion::PhysicalRegion pr;
+  public:
+    bool inline is_empty()
+    {
+      if (rr.privilege_fields.size() == 0) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
 
   template <size_t DIM>  using Point = Legion::Point<DIM>;  
   template <size_t DIM>  using Rect = Legion::Rect<DIM>;  
@@ -131,11 +146,6 @@ namespace LegionSimplified {
     Region(const context &c, const std::vector<field_id_t> &field_id_vec, Legion::LogicalRegion &lr, Legion::LogicalRegion &lr_parent);
   
     ~Region(void);
-    
-    void update_inline_mapping_map(field_id_t fid, Base_Region<DIM> *new_base_region) const;
-    
-    void remove_inline_mapping_map(Base_Region<DIM> *old_base_region) const;
-  
   };
 
   /**
@@ -396,13 +406,18 @@ unsigned int references;
       }
       const Legion::Point<DIM>& operator*(void) const { return Legion::PointInDomainIterator<DIM>::operator*(); }
       bool operator!=(const iterator& other) const
-      {
-        if (is_valid == other.is_valid) {
-          return false;
+      { 
+        if (is_valid == true && other.is_valid == true) {
+          const Legion::Point<DIM> my_pt = operator*();
+          const Legion::Point<DIM> other_pt = other.operator*();
+          return (my_pt != other_pt);
+        } else {
+          if (is_valid == other.is_valid) {
+            return false;
+          } else {
+            return true;
+          }
         }
-        const Legion::Point<DIM> my_pt = operator*();
-        const Legion::Point<DIM> other_pt = other.operator*();
-        return (my_pt != other_pt);
       }
     public:
       bool is_valid;
@@ -821,6 +836,7 @@ unsigned int references;
   private:
     // a map to query tasks by function ptr
     std::map<uintptr_t, UserTask> user_task_map;
+    std::vector<inline_map_region_t> inline_map_region_vector;
   
   public:
     TaskRuntime(void);
@@ -850,6 +866,12 @@ unsigned int references;
     // index task launcher with argmap
     template <size_t DIM, typename F, typename ...Args>
     FutureMap execute_task(F func_ptr, context &c, IdxSpace<DIM> &is, ArgMap argmap, Args... a);
+    
+    std::vector<inline_map_region_t>::const_iterator check_inline_map_conflict(inline_map_region_t &new_region);
+    
+    void add_inline_map(inline_map_region_t &new_region);
+    
+    void remove_inline_map(std::vector<inline_map_region_t>::const_iterator it);
   
   private:
     // query task by task function ptr

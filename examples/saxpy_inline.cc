@@ -36,20 +36,26 @@ void top_level(context c)
     float y = rw_xy.read<float>(FID_Y, pir);
     wd_z.write<float>(FID_Z, pir, x * alpha + y);
   }
+  
+  rw_xy.unmap_physical_region_inline();
   wd_z.unmap_physical_region_inline();
   
   
+  auto ro_xy = RO_Region<1>(input_lr);
   auto ro_z = RO_Region<1>(output_lr);
-  
+ 
+  ro_xy.map_physical_region_inline();
   ro_z.map_physical_region_inline();
   for (auto pir : ro_z) {
-    float x = rw_xy.read<float>(FID_X, pir);
-    float y = rw_xy.read<float>(FID_Y, pir);
+    float x = ro_xy.read<float>(FID_X, pir);
+    float y = ro_xy.read<float>(FID_Y, pir);
     float z = ro_z.read<float>(FID_Z, pir);
     printf("x %f, y %f, z %f\n", x, y, z);
   }
   
-  rw_xy.unmap_physical_region_inline();
+  ro_xy.unmap_physical_region_inline();
+  ro_z.unmap_physical_region_inline();
+  
 }
 
 int main(int argc, char** argv){
