@@ -362,7 +362,6 @@ namespace LegionSimplified {
   template <size_t DIM>
   void Base_Region<DIM>::map_physical_region_inline_with_auto_unmap()
   {
-    assert(0);
   }
   
   template <size_t DIM>

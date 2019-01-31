@@ -652,15 +652,15 @@ unsigned int references;
 //-----------------------------------------------------------------------------
 // Helper to apply a task to tuple 
   template <typename T, typename F, size_t... Is>
-  inline auto apply_impl(T t, F f, std::index_sequence<Is...>)
+  inline auto apply_task_impl(T t, F f, std::index_sequence<Is...>)
   {
     return f(std::get<Is>(t)...);
   }
 
   template <typename F, typename T>
-  inline auto apply(F f, T t)
+  inline auto apply_task(F f, T t)
   {
-    return apply_impl(t, f, std::make_index_sequence<std::tuple_size<T>{}>{});
+    return apply_task_impl(t, f, std::make_index_sequence<std::tuple_size<T>{}>{});
   }
 
 //-----------------------------------------------------------------------------
@@ -676,7 +676,7 @@ unsigned int references;
     context c = { task, ctx, rt };
     size_t i = 0; 
     bind_physical_region_tuple_walker(c, pr, task->regions, i, &at); 
-    return apply(f, std::tuple_cat(std::make_tuple(c), at));
+    return apply_task(f, std::tuple_cat(std::make_tuple(c), at));
   }
 
 //----------------------------------------------------------------------------------
