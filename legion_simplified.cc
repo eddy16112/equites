@@ -31,6 +31,65 @@ namespace LegionSimplified {
   }
   
   /////////////////////////////////////////////////////////////
+  // BaseRegionImpl
+  ///////////////////////////////////////////////////////////// 
+  
+  //----------------------------------public-------------------------------------
+  BaseRegionImpl::BaseRegionImpl(void) : 
+    lr(Legion::LogicalRegion::NO_REGION), 
+    lp(Legion::LogicalPartition::NO_PART), 
+    lr_parent(Legion::LogicalRegion::NO_REGION),
+    is_mapped(PR_NOT_MAPPED)
+  {
+    DEBUG_PRINT((2, "BaseRegionImpl(shared_ptr) constructor %p\n", this));
+    lr = Legion::LogicalRegion::NO_REGION;
+    lp = Legion::LogicalPartition::NO_PART;
+    lr_parent = Legion::LogicalRegion::NO_REGION;
+    is_mapped = PR_NOT_MAPPED;
+    field_id_vector.clear();
+    accessor_map.clear();
+    domain = Legion::Domain::NO_DOMAIN;
+  }
+  
+  BaseRegionImpl::~BaseRegionImpl(void)
+  {
+    DEBUG_PRINT((2, "BaseRegionImpl(shared_ptr) destructor %p\n", this));
+    lr = Legion::LogicalRegion::NO_REGION;
+    lp = Legion::LogicalPartition::NO_PART;
+    lr_parent = Legion::LogicalRegion::NO_REGION;
+    std::map<field_id_t, unsigned char*>::iterator it; 
+    for (it = accessor_map.begin(); it != accessor_map.end(); it++) {
+      if (it->second != nullptr) {
+        DEBUG_PRINT((4, "BaseRegionImpl %p, free accessor of fid %d\n", this, it->first));
+        delete it->second;
+        it->second = nullptr;
+      }
+    }
+    accessor_map.clear();
+    field_id_vector.clear();
+  }
+  
+  void BaseRegionImpl::init_accessor_map(void)
+  {
+    assert(field_id_vector.size() != 0);
+    std::vector<field_id_t>::iterator it; 
+    for (it = field_id_vector.begin(); it < field_id_vector.end(); it++) {
+      DEBUG_PRINT((4, "BaseRegionImpl %p, init_accessor_map for fid %d\n", this, *it));
+      unsigned char *null_ptr = NULL;
+      accessor_map.insert(std::make_pair(*it, null_ptr));
+    }
+  }
+  
+  bool BaseRegionImpl::is_valid(void)
+  {
+    if (field_id_vector.size() == 0) {
+      return false;
+    } else {
+      return true;
+    }
+  }
+  
+  /////////////////////////////////////////////////////////////
   // UserTask 
   /////////////////////////////////////////////////////////////
   
@@ -56,8 +115,8 @@ namespace LegionSimplified {
     
     inline_map_region_vector.clear();
     
-    inline_map_region_t empty_region;
-    assert(empty_region.is_empty() == true);
+    std::shared_ptr<BaseRegionImpl> empty_region = std::make_shared<BaseRegionImpl>();
+    assert(empty_region->is_valid() == false);
     inline_map_region_vector.push_back(empty_region);
   }
   
@@ -76,17 +135,17 @@ namespace LegionSimplified {
     }
   }
   
-  std::vector<inline_map_region_t>::const_iterator TaskRuntime::check_inline_map_conflict(inline_map_region_t &new_region)
+  std::vector<std::shared_ptr<BaseRegionImpl>>::const_iterator TaskRuntime::check_inline_map_conflict(std::shared_ptr<BaseRegionImpl> &new_region)
   {
     return inline_map_region_vector.cbegin();
   }
   
-  void TaskRuntime::add_inline_map(inline_map_region_t &new_region)
+  void TaskRuntime::add_inline_map(std::shared_ptr<BaseRegionImpl> &new_region)
   {
     inline_map_region_vector.push_back(new_region);
   }
   
-  void TaskRuntime::remove_inline_map(std::vector<inline_map_region_t>::const_iterator it)
+  void TaskRuntime::remove_inline_map(std::vector<std::shared_ptr<BaseRegionImpl>>::const_iterator it)
   {
     inline_map_region_vector.erase(it);
   }

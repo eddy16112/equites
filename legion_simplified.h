@@ -32,21 +32,6 @@ namespace LegionSimplified {
     equal,
     restriction,
   };
-  
-  struct inline_map_region_t {
-  public:
-    Legion::RegionRequirement rr;
-    Legion::PhysicalRegion pr;
-  public:
-    bool inline is_empty()
-    {
-      if (rr.privilege_fields.size() == 0) {
-        return true;
-      } else {
-        return false;
-      }
-    }
-  };
 
   template <size_t DIM>  using Point = Legion::Point<DIM>;  
   template <size_t DIM>  using Rect = Legion::Rect<DIM>;  
@@ -313,7 +298,6 @@ unsigned int references;
    * \class BaseRegionImpl
    * A class for representing 
    */
-  template <size_t DIM>
   class BaseRegionImpl {
   public:
     Legion::LogicalRegion lr;  // mutually exclusive with lp
@@ -331,6 +315,8 @@ unsigned int references;
     ~BaseRegionImpl(void);
     
     void init_accessor_map(void);
+    
+    bool is_valid(void);
   };
 
   /**
@@ -343,7 +329,7 @@ unsigned int references;
     const context *ctx;
   
     //BaseRegionImpl<DIM> *base_region_impl;
-    std::shared_ptr<BaseRegionImpl<DIM>> base_region_impl;
+    std::shared_ptr<BaseRegionImpl> base_region_impl;
   
     legion_privilege_mode_t pm; 
     const static legion_coherence_property_t cp = EXCLUSIVE; 
@@ -836,7 +822,7 @@ unsigned int references;
   private:
     // a map to query tasks by function ptr
     std::map<uintptr_t, UserTask> user_task_map;
-    std::vector<inline_map_region_t> inline_map_region_vector;
+    std::vector<std::shared_ptr<BaseRegionImpl>> inline_map_region_vector;
   
   public:
     TaskRuntime(void);
@@ -867,11 +853,11 @@ unsigned int references;
     template <size_t DIM, typename F, typename ...Args>
     FutureMap execute_task(F func_ptr, context &c, IdxSpace<DIM> &is, ArgMap argmap, Args... a);
     
-    std::vector<inline_map_region_t>::const_iterator check_inline_map_conflict(inline_map_region_t &new_region);
+    std::vector<std::shared_ptr<BaseRegionImpl>>::const_iterator check_inline_map_conflict(std::shared_ptr<BaseRegionImpl> &new_region);
     
-    void add_inline_map(inline_map_region_t &new_region);
+    void add_inline_map(std::shared_ptr<BaseRegionImpl> &new_region);
     
-    void remove_inline_map(std::vector<inline_map_region_t>::const_iterator it);
+    void remove_inline_map(std::vector<std::shared_ptr<BaseRegionImpl>>::const_iterator it);
   
   private:
     // query task by task function ptr

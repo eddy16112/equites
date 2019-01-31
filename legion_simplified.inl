@@ -110,61 +110,6 @@ namespace LegionSimplified {
     return get_subregion_by_color(color); 
   }
   
-  
-  /////////////////////////////////////////////////////////////
-  // BaseRegionImpl
-  ///////////////////////////////////////////////////////////// 
-  
-  //----------------------------------public-------------------------------------
-  template <size_t DIM>
-  BaseRegionImpl<DIM>::BaseRegionImpl(void) : 
-    lr(Legion::LogicalRegion::NO_REGION), 
-    lp(Legion::LogicalPartition::NO_PART), 
-    lr_parent(Legion::LogicalRegion::NO_REGION),
-    is_mapped(PR_NOT_MAPPED)
-  {
-    DEBUG_PRINT((2, "BaseRegionImpl(shared_ptr) constructor %p\n", this));
-    lr = Legion::LogicalRegion::NO_REGION;
-    lp = Legion::LogicalPartition::NO_PART;
-    lr_parent = Legion::LogicalRegion::NO_REGION;
-    is_mapped = PR_NOT_MAPPED;
-    field_id_vector.clear();
-    accessor_map.clear();
-    domain = Legion::Domain::NO_DOMAIN;
-  }
-  
-  template <size_t DIM>
-  BaseRegionImpl<DIM>::~BaseRegionImpl(void)
-  {
-    DEBUG_PRINT((2, "BaseRegionImpl(shared_ptr) destructor %p\n", this));
-    lr = Legion::LogicalRegion::NO_REGION;
-    lp = Legion::LogicalPartition::NO_PART;
-    lr_parent = Legion::LogicalRegion::NO_REGION;
-    std::map<field_id_t, unsigned char*>::iterator it; 
-    for (it = accessor_map.begin(); it != accessor_map.end(); it++) {
-      if (it->second != nullptr) {
-        DEBUG_PRINT((4, "BaseRegionImpl %p, free accessor of fid %d\n", this, it->first));
-        delete it->second;
-        it->second = nullptr;
-      }
-    }
-    accessor_map.clear();
-    field_id_vector.clear();
-  }
-  
-  template <size_t DIM>
-  void BaseRegionImpl<DIM>::init_accessor_map(void)
-  {
-    assert(field_id_vector.size() != 0);
-    std::vector<field_id_t>::iterator it; 
-    for (it = field_id_vector.begin(); it < field_id_vector.end(); it++) {
-      DEBUG_PRINT((4, "BaseRegionImpl %p, init_accessor_map for fid %d\n", this, *it));
-      unsigned char *null_ptr = NULL;
-      accessor_map.insert(std::make_pair(*it, null_ptr));
-    }
-  }
-  
-  
   /////////////////////////////////////////////////////////////
   // Base_Region 
   /////////////////////////////////////////////////////////////
@@ -192,7 +137,7 @@ namespace LegionSimplified {
   {
     DEBUG_PRINT((4, "Base_Region Region/field constructor %p\n", this));
     init_parameters();
-    base_region_impl = std::make_shared<BaseRegionImpl<DIM>>();
+    base_region_impl = std::make_shared<BaseRegionImpl>();
     base_region_impl->lr = r.lr;
     base_region_impl->lr_parent = r.lr_parent;
     std::vector<field_id_t>::const_iterator it; 
@@ -209,7 +154,7 @@ namespace LegionSimplified {
   {
     DEBUG_PRINT((4, "Base_Region Region constructor %p\n", this));
     init_parameters();
-    base_region_impl = std::make_shared<BaseRegionImpl<DIM>>();
+    base_region_impl = std::make_shared<BaseRegionImpl>();
     base_region_impl->lr = r.lr;
     base_region_impl->lr_parent = r.lr_parent;
     ctx = &(r.ctx);
@@ -227,7 +172,7 @@ namespace LegionSimplified {
   {
     DEBUG_PRINT((4, "Base_Region Partition/field constructor %p\n", this));
     init_parameters();
-    base_region_impl = std::make_shared<BaseRegionImpl<DIM>>();
+    base_region_impl = std::make_shared<BaseRegionImpl>();
     base_region_impl->lp = par.lp;
     base_region_impl->lr_parent = par.region_parent.lr;
     ctx = &(par.ctx);
@@ -244,7 +189,7 @@ namespace LegionSimplified {
   {
     DEBUG_PRINT((4, "Base_Region Partition constructor %p\n", this));
     init_parameters();
-    base_region_impl = std::make_shared<BaseRegionImpl<DIM>>();
+    base_region_impl = std::make_shared<BaseRegionImpl>();
     base_region_impl->lp = par.lp;
     base_region_impl->lr_parent = par.region_parent.lr;
     ctx = &(par.ctx);
@@ -341,7 +286,7 @@ namespace LegionSimplified {
   {
     check_empty();
     init_parameters();
-    base_region_impl = std::make_shared<BaseRegionImpl<DIM>>();
+    base_region_impl = std::make_shared<BaseRegionImpl>();
     DEBUG_PRINT((4, "Base_Region %p, map_physical_region, BaseRegionImpl shared_ptr %p\n", this, base_region_impl.get()));
   
     base_region_impl->lr = pr.get_logical_region();
