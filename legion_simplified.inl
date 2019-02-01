@@ -127,7 +127,6 @@ namespace LegionSimplified {
   {
     DEBUG_PRINT((8, "Base_Region copy constructor %p\n", this));
     init_parameters();
-    this->ctx = rhs.ctx;
     this->base_region_impl = rhs.base_region_impl;
     this->pm = rhs.pm;
   }
@@ -137,7 +136,7 @@ namespace LegionSimplified {
   {
     DEBUG_PRINT((4, "Base_Region Region/field constructor %p\n", this));
     init_parameters();
-    base_region_impl = std::make_shared<BaseRegionImpl>();
+    base_region_impl = std::make_shared<BaseRegionImpl>(r.ctx);
     base_region_impl->lr = r.lr;
     base_region_impl->lr_parent = r.lr_parent;
     std::vector<field_id_t>::const_iterator it; 
@@ -145,8 +144,7 @@ namespace LegionSimplified {
        printf("base set fid %d\n", *it);
        base_region_impl->field_id_vector.push_back(*it); 
     }
-    ctx = &(r.ctx);
-    base_region_impl->domain = ctx->runtime->get_index_space_domain(ctx->ctx, base_region_impl->lr.get_index_space());
+    base_region_impl->domain = base_region_impl->ctx.runtime->get_index_space_domain(base_region_impl->ctx.ctx, base_region_impl->lr.get_index_space());
   }
 
   template <size_t DIM>
@@ -154,17 +152,16 @@ namespace LegionSimplified {
   {
     DEBUG_PRINT((4, "Base_Region Region constructor %p\n", this));
     init_parameters();
-    base_region_impl = std::make_shared<BaseRegionImpl>();
+    base_region_impl = std::make_shared<BaseRegionImpl>(r.ctx);
     base_region_impl->lr = r.lr;
     base_region_impl->lr_parent = r.lr_parent;
-    ctx = &(r.ctx);
     const std::vector<field_id_t> &task_field_id_vec = r.field_id_vec;
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));
        base_region_impl->field_id_vector.push_back(*it); 
     }
-    base_region_impl->domain = ctx->runtime->get_index_space_domain(ctx->ctx, base_region_impl->lr.get_index_space());
+    base_region_impl->domain = base_region_impl->ctx.runtime->get_index_space_domain(base_region_impl->ctx.ctx, base_region_impl->lr.get_index_space());
   }
 
   template <size_t DIM>
@@ -172,10 +169,9 @@ namespace LegionSimplified {
   {
     DEBUG_PRINT((4, "Base_Region Partition/field constructor %p\n", this));
     init_parameters();
-    base_region_impl = std::make_shared<BaseRegionImpl>();
+    base_region_impl = std::make_shared<BaseRegionImpl>(par.ctx);
     base_region_impl->lp = par.lp;
     base_region_impl->lr_parent = par.region_parent.lr;
-    ctx = &(par.ctx);
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));
@@ -189,10 +185,9 @@ namespace LegionSimplified {
   {
     DEBUG_PRINT((4, "Base_Region Partition constructor %p\n", this));
     init_parameters();
-    base_region_impl = std::make_shared<BaseRegionImpl>();
+    base_region_impl = std::make_shared<BaseRegionImpl>(par.ctx);
     base_region_impl->lp = par.lp;
     base_region_impl->lr_parent = par.region_parent.lr;
-    ctx = &(par.ctx);
     const std::vector<field_id_t> &task_field_id_vec = par.region_parent.field_id_vec;
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
@@ -205,11 +200,13 @@ namespace LegionSimplified {
   template <size_t DIM>
   Base_Region<DIM>::~Base_Region(void)
   {
+    /*
     if (base_region_impl != nullptr) {
       if (base_region_impl->is_mapped == PR_INLINE_MAPPED) {
         unmap_physical_region_inline();
       }
     }
+    */
     /*
     std::map<field_id_t, unsigned char*>::iterator it; 
     for (it = accessor_map.begin(); it != accessor_map.end(); it++) {
@@ -220,7 +217,6 @@ namespace LegionSimplified {
       }
     }*/
 
-    ctx = nullptr;
  /*   
     if (logical_region_impl != NULL) {
       printf("free %p\n", logical_region_impl);
@@ -286,7 +282,7 @@ namespace LegionSimplified {
   {
     check_empty();
     init_parameters();
-    base_region_impl = std::make_shared<BaseRegionImpl>();
+    base_region_impl = std::make_shared<BaseRegionImpl>(c);
     DEBUG_PRINT((4, "Base_Region %p, map_physical_region, BaseRegionImpl shared_ptr %p\n", this, base_region_impl.get()));
   
     base_region_impl->lr = pr.get_logical_region();
@@ -299,7 +295,6 @@ namespace LegionSimplified {
       unsigned char *null_ptr = nullptr;
       base_region_impl->accessor_map.insert(std::make_pair(*it, null_ptr)); 
     }
-    ctx = &c;
     base_region_impl->domain = c.runtime->get_index_space_domain(c.ctx, rr.region.get_index_space());
     base_region_impl->is_mapped = PR_TASK_MAPPED;
   }
@@ -316,7 +311,6 @@ namespace LegionSimplified {
       return;
     }
     DEBUG_PRINT((4, "Base_Region %p, map_physical_region_inline, BaseRegionImpl shared_ptr %p\n", this, base_region_impl.get()));
-    assert(ctx != NULL);
     Legion::RegionRequirement req(base_region_impl->lr, pm, cp, base_region_impl->lr_parent);
     std::vector<field_id_t>::iterator it; 
     for (it = base_region_impl->field_id_vector.begin(); it < base_region_impl->field_id_vector.end(); it++) {
@@ -325,9 +319,9 @@ namespace LegionSimplified {
       unsigned char *null_ptr = NULL;
       base_region_impl->accessor_map.insert(std::make_pair(*it, null_ptr));  
     }
-    base_region_impl->physical_region = ctx->runtime->map_region(ctx->ctx, req);
+    base_region_impl->physical_region = base_region_impl->ctx.runtime->map_region(base_region_impl->ctx.ctx, req);
     base_region_impl->physical_region.wait_until_valid();
-    base_region_impl->domain = ctx->runtime->get_index_space_domain(ctx->ctx, req.region.get_index_space());
+    base_region_impl->domain = base_region_impl->ctx.runtime->get_index_space_domain(base_region_impl->ctx.ctx, req.region.get_index_space());
     base_region_impl->is_mapped = PR_INLINE_MAPPED;
   }
   
@@ -335,9 +329,7 @@ namespace LegionSimplified {
   void Base_Region<DIM>::unmap_physical_region_inline(void)
   {
     if (base_region_impl->is_mapped == PR_INLINE_MAPPED) {
-      assert(ctx != NULL);
-      ctx->runtime->unmap_region(ctx->ctx, base_region_impl->physical_region);
-      base_region_impl->is_mapped = PR_NOT_MAPPED;
+      base_region_impl->unmap_physical_region();
       DEBUG_PRINT((4, "Base_Region %p, unmap region inline\n", this));
     }
   }
@@ -345,7 +337,6 @@ namespace LegionSimplified {
   template <size_t DIM>
   void Base_Region<DIM>::cleanup_reference(void)
   {
-    ctx = nullptr;
     if (base_region_impl != nullptr) {
     //  auto tmp = base_region_impl;
       DEBUG_PRINT((4, "Base_Region %p, reset base_region_impl %p, count %ld\n", this, base_region_impl.get(), base_region_impl.use_count()));
@@ -369,7 +360,7 @@ namespace LegionSimplified {
   Region<DIM> Base_Region<DIM>::get_region(void)
   {
     // fixme 
-    Region<DIM> region = Region<DIM>(*ctx, base_region_impl->field_id_vector, base_region_impl->lr, base_region_impl->lr_parent);
+    Region<DIM> region = Region<DIM>(base_region_impl->ctx, base_region_impl->field_id_vector, base_region_impl->lr, base_region_impl->lr_parent);
     return region;
   }
   
@@ -377,14 +368,12 @@ namespace LegionSimplified {
   template <size_t DIM>
   void Base_Region<DIM>::init_parameters(void)
   {
-    ctx = nullptr;
     base_region_impl = nullptr;
   }
 
   template <size_t DIM>
   void Base_Region<DIM>::check_empty(void)
   {
-    assert(ctx == nullptr);
     assert(base_region_impl == nullptr);
     
   } 

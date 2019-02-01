@@ -300,6 +300,7 @@ unsigned int references;
    */
   class BaseRegionImpl {
   public:
+    const context ctx;
     Legion::LogicalRegion lr;  // mutually exclusive with lp
     Legion::LogicalPartition lp; // mutually exclusive with lr
     Legion::LogicalRegion lr_parent;
@@ -310,13 +311,15 @@ unsigned int references;
     std::map<field_id_t, unsigned char*> accessor_map;
     
   public:
-    BaseRegionImpl(void);
+    BaseRegionImpl(const context ctx);
     
     ~BaseRegionImpl(void);
     
     void init_accessor_map(void);
     
     bool is_valid(void);
+    
+    void unmap_physical_region();
   };
 
   /**
@@ -326,7 +329,6 @@ unsigned int references;
   template <size_t DIM>
   class Base_Region {
   public:
-    const context *ctx;
   
     //BaseRegionImpl<DIM> *base_region_impl;
     std::shared_ptr<BaseRegionImpl> base_region_impl;

@@ -35,7 +35,8 @@ namespace LegionSimplified {
   ///////////////////////////////////////////////////////////// 
   
   //----------------------------------public-------------------------------------
-  BaseRegionImpl::BaseRegionImpl(void) : 
+  BaseRegionImpl::BaseRegionImpl(const context ctx) :
+    ctx(ctx), 
     lr(Legion::LogicalRegion::NO_REGION), 
     lp(Legion::LogicalPartition::NO_PART), 
     lr_parent(Legion::LogicalRegion::NO_REGION),
@@ -67,6 +68,10 @@ namespace LegionSimplified {
     }
     accessor_map.clear();
     field_id_vector.clear();
+    
+    if (is_mapped == PR_INLINE_MAPPED) {
+      unmap_physical_region();
+    }
   }
   
   void BaseRegionImpl::init_accessor_map(void)
@@ -86,6 +91,16 @@ namespace LegionSimplified {
       return false;
     } else {
       return true;
+    }
+  }
+  
+  void BaseRegionImpl::unmap_physical_region(void)
+  {
+    if (physical_region.is_mapped()) {
+      ctx.runtime->unmap_region(ctx.ctx, physical_region);
+      is_mapped = PR_NOT_MAPPED;
+      
+      DEBUG_PRINT((4, "BaseRegionImpl %p, unmap region inline\n", this));
     }
   }
   
@@ -115,7 +130,8 @@ namespace LegionSimplified {
     
     inline_map_region_vector.clear();
     
-    std::shared_ptr<BaseRegionImpl> empty_region = std::make_shared<BaseRegionImpl>();
+    context ctx;
+    std::shared_ptr<BaseRegionImpl> empty_region = std::make_shared<BaseRegionImpl>(ctx);
     assert(empty_region->is_valid() == false);
     inline_map_region_vector.push_back(empty_region);
   }
