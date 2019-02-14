@@ -146,9 +146,9 @@ namespace LegionSimplified {
     Legion::LogicalPartition lp;
   
   public:
-    Partition(int p_type, Region<DIM> &r, IdxSpace<DIM> &ispace);
+    Partition(enum partition_type p_type, Region<DIM> &r, IdxSpace<DIM> &ispace);
   
-    Partition(int p_type, Region<DIM> &r, IdxSpace<DIM> &ispace, Legion::DomainTransform &dt, Rect<DIM> &rect);
+    Partition(enum partition_type p_type, Region<DIM> &r, IdxSpace<DIM> &ispace, Legion::DomainTransform &dt, Rect<DIM> &rect);
   
     ~Partition(void);
     
@@ -453,7 +453,8 @@ unsigned int references;
   
     template< typename a>
     a read(Legion::Point<DIM> i);
-     
+    
+  protected: 
     void init_ro_parameters(void);
   
   private:
@@ -488,7 +489,8 @@ unsigned int references;
   
     template< typename a>
     void write(Legion::Point<DIM> i, a x);
-   
+    
+  protected:
     void init_wd_parameters(void);
   
   private: 
@@ -529,7 +531,8 @@ unsigned int references;
   
     template< typename a>
     void write(Legion::Point<DIM> i, a x);
- 
+  
+  protected:
     void init_rw_parameters(void);
 
   private:   

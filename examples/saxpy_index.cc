@@ -89,8 +89,8 @@ void top_level(context c)
   runtime.execute_task(init_value, c, color_is, wd_y);
 
   float alpha = 2;
-  auto rw_xy = RO_Region<1>(input_lp);
-  auto wd_z = WD_Region<1>(output_lp);
+  auto rw_xy = RO_Partition<1>(input_lp);
+  auto wd_z = WD_Partition<1>(output_lp);
   runtime.execute_task(saxpy, c, color_is, alpha, rw_xy, wd_z);
 
   auto ro_xy_all = RO_Region<1>(input_lr);

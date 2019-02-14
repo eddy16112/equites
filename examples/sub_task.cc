@@ -21,7 +21,7 @@ void init_value(context c, WD_Region<1> region_xy){
   }*/
 }
 
-void print_value_2(context c, RW_Region<1> region_xy){
+void print_value_2(context c, RO_Region<1> region_xy){
   /*
   for(auto i : ab) {
     float z = c.read(i, FID_Z);
@@ -49,7 +49,7 @@ void print_value(context c, RW_Region<1> region_xy){
   } */
   
   float value = 3;
-  for (RO_Region<1>::iterator pir(region_xy); pir(); pir++) {
+  for (RW_Region<1>::iterator pir(region_xy); pir(); pir++) {
     float x = region_xy.read<float>(FID_X, *pir);
     double y = region_xy.read<float>(FID_Y, *pir);
     printf("x %f, y %f\n", x, y);
@@ -62,7 +62,7 @@ void print_value(context c, RW_Region<1> region_xy){
   IdxSpace<1> color_is(c, 2);
   Partition<1> input_lp(equal, input_lr, color_is);
   
-  auto ro_xy = RW_Region<1>(input_lp);
+  auto ro_xy = RO_Partition<1>(input_lp);
   runtime.execute_task(print_value_2, c, color_is, ro_xy);
   
   printf("end print value\n");

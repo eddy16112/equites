@@ -73,7 +73,7 @@ namespace LegionSimplified {
   
   //----------------------------------public-------------------------------------
   template <size_t DIM>
-  Partition<DIM>::Partition(int p_type, Region<DIM> &r, IdxSpace<DIM> &ispace) : 
+  Partition<DIM>::Partition(enum partition_type p_type, Region<DIM> &r, IdxSpace<DIM> &ispace) : 
     ctx(r.ctx), region_parent(r)
   {
     ip = ctx.runtime->create_equal_partition(ctx.ctx, r.lr.get_index_space(), ispace.is);
@@ -81,7 +81,7 @@ namespace LegionSimplified {
   }
   
   template <size_t DIM>
-  Partition<DIM>::Partition(int p_type, Region<DIM> &r, IdxSpace<DIM> &ispace, 
+  Partition<DIM>::Partition(enum partition_type p_type, Region<DIM> &r, IdxSpace<DIM> &ispace, 
     Legion::DomainTransform &dt, Rect<DIM> &rect) : 
     ctx(r.ctx), region_parent(r)
   {
@@ -442,12 +442,14 @@ namespace LegionSimplified {
     return (*acc)[i];
   }
   
-  //----------------------------------private-------------------------------------
+  //----------------------------------protected-------------------------------------
   template <size_t DIM>
   void RO_Region<DIM>::init_ro_parameters(void)
   {
     this->pm = READ_ONLY;
   }
+  
+  //----------------------------------private-------------------------------------
   
   template <size_t DIM>
   template< typename a>
@@ -539,12 +541,14 @@ namespace LegionSimplified {
     (*acc)[i] = x; 
   }
   
-  //----------------------------------private-------------------------------------
+  //----------------------------------protected-------------------------------------
   template <size_t DIM>
   void WD_Region<DIM>::init_wd_parameters(void)
   {
     this->pm = WRITE_DISCARD;
   }
+  
+  //----------------------------------private-------------------------------------
 
   template <size_t DIM>
   template< typename a>
@@ -659,12 +663,14 @@ namespace LegionSimplified {
     (*acc)[i] = x; 
   }
   
-  //----------------------------------private-------------------------------------
+  //----------------------------------protected-------------------------------------
   template <size_t DIM>
   void RW_Region<DIM>::init_rw_parameters(void)
   {
     this->pm = READ_WRITE;
   }
+  
+  //----------------------------------private-------------------------------------
 
   template <size_t DIM>
   template< typename a>
@@ -694,7 +700,7 @@ namespace LegionSimplified {
   }
   
   /////////////////////////////////////////////////////////////
-  // WD_Region
+  // RO_Partition
   /////////////////////////////////////////////////////////////
   
   //----------------------------------public-------------------------------------
@@ -707,14 +713,14 @@ namespace LegionSimplified {
   RO_Partition<DIM>::RO_Partition(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec) 
     : RO_Region<DIM>(par, task_field_id_vec)
   {
-    RO_Region<DIM>::init_wd_parameters();
+    RO_Region<DIM>::init_ro_parameters();
   }
 
   template <size_t DIM>
   RO_Partition<DIM>::RO_Partition(Partition<DIM> &par) 
     : RO_Region<DIM>(par)
   {
-    RO_Region<DIM>::init_wd_parameters();
+    RO_Region<DIM>::init_ro_parameters();
   }
 
   template <size_t DIM>
@@ -723,7 +729,7 @@ namespace LegionSimplified {
   }
   
   /////////////////////////////////////////////////////////////
-  // WD_Region
+  // WD_Partition
   /////////////////////////////////////////////////////////////
   
   //----------------------------------public-------------------------------------
@@ -752,7 +758,7 @@ namespace LegionSimplified {
   }
   
   /////////////////////////////////////////////////////////////
-  // RW_Region
+  // RW_Partition
   /////////////////////////////////////////////////////////////
   
   //----------------------------------public-------------------------------------
@@ -765,14 +771,14 @@ namespace LegionSimplified {
   RW_Partition<DIM>::RW_Partition(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec) 
     : RW_Region<DIM>(par, task_field_id_vec)
   {
-    RW_Region<DIM>::init_wd_parameters();
+    RW_Region<DIM>::init_rw_parameters();
   }
 
   template <size_t DIM>
   RW_Partition<DIM>::RW_Partition(Partition<DIM> &par) 
     : RW_Region<DIM>(par)
   {
-    RW_Region<DIM>::init_wd_parameters();
+    RW_Region<DIM>::init_rw_parameters();
   }
 
   template <size_t DIM>
