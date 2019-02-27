@@ -121,7 +121,7 @@ namespace LegionSimplified {
   class Region {
   public:
     const context &ctx;
-    const std::vector<field_id_t> &field_id_vec;
+    const std::vector<field_id_t> field_id_vec;
     Legion::LogicalRegion lr; 
     Legion::LogicalRegion lr_parent;
   
