@@ -74,7 +74,7 @@ namespace LegionSimplified {
   //----------------------------------public-------------------------------------
   template <size_t DIM>
   Partition<DIM>::Partition(enum partition_type p_type, Region<DIM> &r, IdxSpace<DIM> &ispace) : 
-    ctx(r.ctx), region_parent(r)
+    ctx(r.ctx), field_id_vec(r.field_id_vec), lr_parent(r.lr_parent)
   {
     ip = ctx.runtime->create_equal_partition(ctx.ctx, r.lr.get_index_space(), ispace.is);
     lp = ctx.runtime->get_logical_partition(ctx.ctx, r.lr, ip);
@@ -83,7 +83,7 @@ namespace LegionSimplified {
   template <size_t DIM>
   Partition<DIM>::Partition(enum partition_type p_type, Region<DIM> &r, IdxSpace<DIM> &ispace, 
     Legion::DomainTransform &dt, Rect<DIM> &rect) : 
-    ctx(r.ctx), region_parent(r)
+    ctx(r.ctx), field_id_vec(r.field_id_vec), lr_parent(r.lr_parent)
   {
     ip = ctx.runtime->create_partition_by_restriction(ctx.ctx, r.lr.get_index_space(), ispace.is, dt, rect);
     lp = ctx.runtime->get_logical_partition(ctx.ctx, r.lr, ip);
@@ -99,8 +99,7 @@ namespace LegionSimplified {
   Region<DIM> Partition<DIM>::get_subregion_by_color(int color)
   {
     Legion::LogicalRegion sub_lr = ctx.runtime->get_logical_subregion_by_color(ctx.ctx, lp, color);
-    Region<DIM> subregion = region_parent;
-    subregion.lr = sub_lr;
+    Region<DIM> subregion(ctx, field_id_vec, sub_lr, lr_parent);
     return subregion; 
   }
   
@@ -171,7 +170,7 @@ namespace LegionSimplified {
     init_parameters();
     base_region_impl = std::make_shared<BaseRegionImpl>(par.ctx);
     base_region_impl->lp = par.lp;
-    base_region_impl->lr_parent = par.region_parent.lr;
+    base_region_impl->lr_parent = par.lr_parent;
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));
@@ -187,8 +186,8 @@ namespace LegionSimplified {
     init_parameters();
     base_region_impl = std::make_shared<BaseRegionImpl>(par.ctx);
     base_region_impl->lp = par.lp;
-    base_region_impl->lr_parent = par.region_parent.lr;
-    const std::vector<field_id_t> &task_field_id_vec = par.region_parent.field_id_vec;
+    base_region_impl->lr_parent = par.lr_parent;
+    const std::vector<field_id_t> &task_field_id_vec = par.field_id_vec;
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));

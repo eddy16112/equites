@@ -141,7 +141,8 @@ namespace LegionSimplified {
   class Partition {
   public:
     const context &ctx;
-    const Region<DIM> &region_parent;
+    const std::vector<field_id_t> field_id_vec;
+    Legion::LogicalRegion lr_parent;
     Legion::IndexPartition ip;
     Legion::LogicalPartition lp;
   
