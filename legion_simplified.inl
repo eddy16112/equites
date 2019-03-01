@@ -13,14 +13,14 @@ namespace LegionSimplified {
     Rect<DIM> rect = Rect<DIM>(Point<DIM>::ZEROES(), p-Point<DIM>::ONES());
     std::cout << "ispace set rect to be from " << Point<DIM>::ZEROES() 
       << " to " << rect.hi << std::endl; 
-    is = c.runtime->create_index_space(c.ctx, rect); 
+    index_space = c.runtime->create_index_space(c.ctx, rect); 
   }
   
   template <size_t DIM>
   IdxSpace<DIM>::~IdxSpace(void)
   {
     DEBUG_PRINT((4, "IdxSpace destructor %p\n", this));
-    ctx.runtime->destroy_index_space(ctx.ctx, is);
+    ctx.runtime->destroy_index_space(ctx.ctx, index_space);
   }
   
   /////////////////////////////////////////////////////////////
@@ -29,10 +29,10 @@ namespace LegionSimplified {
   
   //----------------------------------public-------------------------------------
   template <typename T>
-  void FdSpace::add_field(field_id_t fid)
+  void FdSpace::add_field(field_id_t field_id)
   {
-    allocator.allocate_field(sizeof(T),fid);
-    field_id_vec.push_back(fid);
+    allocator.allocate_field(sizeof(T),field_id);
+    field_id_vector.push_back(field_id);
   }
   
   /////////////////////////////////////////////////////////////
@@ -42,16 +42,16 @@ namespace LegionSimplified {
   //----------------------------------public-------------------------------------
   template <size_t DIM>
   Region<DIM>::Region(IdxSpace<DIM> &ispace, FdSpace &fspace) : 
-    ctx(fspace.ctx), field_id_vec(fspace.field_id_vec)
+    ctx(fspace.ctx), field_id_vector(fspace.field_id_vector)
   {
     DEBUG_PRINT((4, "Region constructor %p\n", this));
-    lr = ctx.runtime->create_logical_region(ctx.ctx, ispace.is, fspace.fs);
-    lr_parent = lr;
+    logical_region = ctx.runtime->create_logical_region(ctx.ctx, ispace.index_space, fspace.field_space);
+    logical_region_parent = logical_region;
   }
   
   template <size_t DIM>
   Region<DIM>::Region(const context &c, const std::vector<field_id_t> &field_id_vec, Legion::LogicalRegion &lr, Legion::LogicalRegion &lr_parent) :
-    ctx(c), field_id_vec(field_id_vec), lr(lr), lr_parent(lr_parent)
+    ctx(c), field_id_vector(field_id_vec), logical_region(lr), logical_region_parent(lr_parent)
   {
     DEBUG_PRINT((4, "Region constructor all %p\n", this));
   }
@@ -61,9 +61,9 @@ namespace LegionSimplified {
   {
     DEBUG_PRINT((4, "Region destructor %p\n", this));
     // if I am the parent logical region, then destroy it.
-    if (lr == lr_parent) {
+    if (logical_region == logical_region_parent) {
       DEBUG_PRINT((4, "Region destructor destroy lr %p\n", this));
-      ctx.runtime->destroy_logical_region(ctx.ctx, lr);
+      ctx.runtime->destroy_logical_region(ctx.ctx, logical_region);
     }
   }
   
@@ -74,19 +74,19 @@ namespace LegionSimplified {
   //----------------------------------public-------------------------------------
   template <size_t DIM>
   Partition<DIM>::Partition(enum partition_type p_type, Region<DIM> &r, IdxSpace<DIM> &ispace) : 
-    ctx(r.ctx), field_id_vec(r.field_id_vec), lr_parent(r.lr_parent)
+    ctx(r.ctx), field_id_vector(r.field_id_vector), logical_region_parent(r.logical_region_parent)
   {
-    ip = ctx.runtime->create_equal_partition(ctx.ctx, r.lr.get_index_space(), ispace.is);
-    lp = ctx.runtime->get_logical_partition(ctx.ctx, r.lr, ip);
+    index_partition = ctx.runtime->create_equal_partition(ctx.ctx, r.logical_region.get_index_space(), ispace.index_space);
+    logical_partition = ctx.runtime->get_logical_partition(ctx.ctx, r.logical_region, index_partition);
   }
   
   template <size_t DIM>
   Partition<DIM>::Partition(enum partition_type p_type, Region<DIM> &r, IdxSpace<DIM> &ispace, 
     Legion::DomainTransform &dt, Rect<DIM> &rect) : 
-    ctx(r.ctx), field_id_vec(r.field_id_vec), lr_parent(r.lr_parent)
+    ctx(r.ctx), field_id_vector(r.field_id_vector), logical_region_parent(r.logical_region_parent)
   {
-    ip = ctx.runtime->create_partition_by_restriction(ctx.ctx, r.lr.get_index_space(), ispace.is, dt, rect);
-    lp = ctx.runtime->get_logical_partition(ctx.ctx, r.lr, ip);
+    index_partition = ctx.runtime->create_partition_by_restriction(ctx.ctx, r.logical_region.get_index_space(), ispace.index_space, dt, rect);
+    logical_partition = ctx.runtime->get_logical_partition(ctx.ctx, r.logical_region, index_partition);
   }
   
   template <size_t DIM>
@@ -98,8 +98,8 @@ namespace LegionSimplified {
   template <size_t DIM>
   Region<DIM> Partition<DIM>::get_subregion_by_color(int color)
   {
-    Legion::LogicalRegion sub_lr = ctx.runtime->get_logical_subregion_by_color(ctx.ctx, lp, color);
-    Region<DIM> subregion(ctx, field_id_vec, sub_lr, lr_parent);
+    Legion::LogicalRegion sub_lr = ctx.runtime->get_logical_subregion_by_color(ctx.ctx, logical_partition, color);
+    Region<DIM> subregion(ctx, field_id_vector, sub_lr, logical_region_parent);
     return subregion; 
   }
   
@@ -136,14 +136,14 @@ namespace LegionSimplified {
     DEBUG_PRINT((4, "Base_Region Region/field constructor %p\n", this));
     init_parameters();
     base_region_impl = std::make_shared<BaseRegionImpl>(r.ctx);
-    base_region_impl->lr = r.lr;
-    base_region_impl->lr_parent = r.lr_parent;
+    base_region_impl->logical_region = r.logical_region;
+    base_region_impl->logical_region_parent = r.logical_region_parent;
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        printf("base set fid %d\n", *it);
        base_region_impl->field_id_vector.push_back(*it); 
     }
-    base_region_impl->domain = base_region_impl->ctx.runtime->get_index_space_domain(base_region_impl->ctx.ctx, base_region_impl->lr.get_index_space());
+    base_region_impl->domain = base_region_impl->ctx.runtime->get_index_space_domain(base_region_impl->ctx.ctx, base_region_impl->logical_region.get_index_space());
   }
 
   template <size_t DIM>
@@ -152,15 +152,15 @@ namespace LegionSimplified {
     DEBUG_PRINT((4, "Base_Region Region constructor %p\n", this));
     init_parameters();
     base_region_impl = std::make_shared<BaseRegionImpl>(r.ctx);
-    base_region_impl->lr = r.lr;
-    base_region_impl->lr_parent = r.lr_parent;
-    const std::vector<field_id_t> &task_field_id_vec = r.field_id_vec;
+    base_region_impl->logical_region = r.logical_region;
+    base_region_impl->logical_region_parent = r.logical_region_parent;
+    const std::vector<field_id_t> &task_field_id_vec = r.field_id_vector;
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));
        base_region_impl->field_id_vector.push_back(*it); 
     }
-    base_region_impl->domain = base_region_impl->ctx.runtime->get_index_space_domain(base_region_impl->ctx.ctx, base_region_impl->lr.get_index_space());
+    base_region_impl->domain = base_region_impl->ctx.runtime->get_index_space_domain(base_region_impl->ctx.ctx, base_region_impl->logical_region.get_index_space());
   }
 
   template <size_t DIM>
@@ -169,8 +169,8 @@ namespace LegionSimplified {
     DEBUG_PRINT((4, "Base_Region Partition/field constructor %p\n", this));
     init_parameters();
     base_region_impl = std::make_shared<BaseRegionImpl>(par.ctx);
-    base_region_impl->lp = par.lp;
-    base_region_impl->lr_parent = par.lr_parent;
+    base_region_impl->logical_partition = par.logical_partition;
+    base_region_impl->logical_region_parent = par.logical_region_parent;
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));
@@ -185,9 +185,9 @@ namespace LegionSimplified {
     DEBUG_PRINT((4, "Base_Region Partition constructor %p\n", this));
     init_parameters();
     base_region_impl = std::make_shared<BaseRegionImpl>(par.ctx);
-    base_region_impl->lp = par.lp;
-    base_region_impl->lr_parent = par.lr_parent;
-    const std::vector<field_id_t> &task_field_id_vec = par.field_id_vec;
+    base_region_impl->logical_partition = par.logical_partition;
+    base_region_impl->logical_region_parent = par.logical_region_parent;
+    const std::vector<field_id_t> &task_field_id_vec = par.field_id_vector;
     std::vector<field_id_t>::const_iterator it; 
     for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
        DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));
@@ -255,7 +255,7 @@ namespace LegionSimplified {
   template <size_t DIM>
   Legion::RegionRequirement Base_Region<DIM>::set_region_requirement_single(void)
   {
-    Legion::RegionRequirement req(base_region_impl->lr, pm, cp, base_region_impl->lr_parent);
+    Legion::RegionRequirement req(base_region_impl->logical_region, pm, cp, base_region_impl->logical_region_parent);
     std::vector<field_id_t>::iterator it; 
     for (it = base_region_impl->field_id_vector.begin(); it < base_region_impl->field_id_vector.end(); it++) {
       DEBUG_PRINT((4, "Base_Region %p, set RR fid %d for single launcher\n", this, *it));
@@ -267,7 +267,7 @@ namespace LegionSimplified {
   template <size_t DIM>
   Legion::RegionRequirement Base_Region<DIM>::set_region_requirement_index(void)
   {
-    Legion::RegionRequirement req(base_region_impl->lp, 0, pm, cp, base_region_impl->lr_parent);
+    Legion::RegionRequirement req(base_region_impl->logical_partition, 0, pm, cp, base_region_impl->logical_region_parent);
     std::vector<field_id_t>::iterator it; 
     for (it = base_region_impl->field_id_vector.begin(); it < base_region_impl->field_id_vector.end(); it++) {
       DEBUG_PRINT((4, "Base_Region %p, set RR fid %d for index launcher\n", this, *it));
@@ -284,8 +284,8 @@ namespace LegionSimplified {
     base_region_impl = std::make_shared<BaseRegionImpl>(c);
     DEBUG_PRINT((4, "Base_Region %p, map_physical_region, BaseRegionImpl shared_ptr %p\n", this, base_region_impl.get()));
   
-    base_region_impl->lr = pr.get_logical_region();
-    base_region_impl->lr_parent = rr.parent;
+    base_region_impl->logical_region = pr.get_logical_region();
+    base_region_impl->logical_region_parent = rr.parent;
     base_region_impl->physical_region = pr;
     std::set<field_id_t>::iterator it;
     for (it = rr.privilege_fields.begin(); it != rr.privilege_fields.end(); it++) {
@@ -310,7 +310,7 @@ namespace LegionSimplified {
       return;
     }
     DEBUG_PRINT((4, "Base_Region %p, map_physical_region_inline, BaseRegionImpl shared_ptr %p\n", this, base_region_impl.get()));
-    Legion::RegionRequirement req(base_region_impl->lr, pm, cp, base_region_impl->lr_parent);
+    Legion::RegionRequirement req(base_region_impl->logical_region, pm, cp, base_region_impl->logical_region_parent);
     std::vector<field_id_t>::iterator it; 
     for (it = base_region_impl->field_id_vector.begin(); it < base_region_impl->field_id_vector.end(); it++) {
       DEBUG_PRINT((4, "Base_Region %p, inline map for fid %d\n", this, *it));
@@ -359,7 +359,7 @@ namespace LegionSimplified {
   Region<DIM> Base_Region<DIM>::get_region(void)
   {
     // fixme 
-    Region<DIM> region = Region<DIM>(base_region_impl->ctx, base_region_impl->field_id_vector, base_region_impl->lr, base_region_impl->lr_parent);
+    Region<DIM> region = Region<DIM>(base_region_impl->ctx, base_region_impl->field_id_vector, base_region_impl->logical_region, base_region_impl->logical_region_parent);
     return region;
   }
   
@@ -827,7 +827,7 @@ namespace LegionSimplified {
     argtuple p2 = std::make_tuple(a...);
     base_region_cleanup_shared_ptr_tuple_walker(p2);
     Legion::ArgumentMap arg_map; 
-    Legion::IndexLauncher index_launcher(id, ispace.is, Legion::TaskArgument(&p2, sizeof(p2)), arg_map); 
+    Legion::IndexLauncher index_launcher(id, ispace.index_space, Legion::TaskArgument(&p2, sizeof(p2)), arg_map); 
     index_launcher_region_requirement_tuple_walker(index_launcher, p);  
     return FutureMap(c.runtime->execute_index_space(c.ctx, index_launcher));
   }
@@ -839,7 +839,7 @@ namespace LegionSimplified {
     argtuple p = std::make_tuple(a...);
     argtuple p2 = std::make_tuple(a...);
     base_region_cleanup_shared_ptr_tuple_walker(p2);
-    Legion::IndexLauncher index_launcher(id, ispace.is, Legion::TaskArgument(&p2, sizeof(p2)), argmap.arg_map); 
+    Legion::IndexLauncher index_launcher(id, ispace.index_space, Legion::TaskArgument(&p2, sizeof(p2)), argmap.arg_map); 
     index_launcher_region_requirement_tuple_walker(index_launcher, p);  
     return FutureMap(c.runtime->execute_index_space(c.ctx, index_launcher));
   }

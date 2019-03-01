@@ -80,7 +80,7 @@ namespace LegionSimplified {
   class IdxSpace {
   public:
     const context &ctx;
-    Legion::IndexSpace is;
+    Legion::IndexSpace index_space;
   
   public:  
     IdxSpace(const context& c, Point<DIM> p);
@@ -95,9 +95,9 @@ namespace LegionSimplified {
   class FdSpace {
   public:
     const context &ctx;
-    Legion::FieldSpace fs;
+    Legion::FieldSpace field_space;
     Legion::FieldAllocator allocator;
-    std::vector<field_id_t> field_id_vec;
+    std::vector<field_id_t> field_id_vector;
   
   public:
     FdSpace(const context& c);
@@ -105,9 +105,9 @@ namespace LegionSimplified {
     ~FdSpace(void);
   
     template <typename T>
-    void add_field(field_id_t fid);
+    void add_field(field_id_t field_id);
     
-    void add_field(size_t size, field_id_t fid);
+    void add_field(size_t size, field_id_t field_id);
   };
 
   template <size_t DIM>
@@ -121,9 +121,9 @@ namespace LegionSimplified {
   class Region {
   public:
     const context &ctx;
-    const std::vector<field_id_t> field_id_vec;
-    Legion::LogicalRegion lr; 
-    Legion::LogicalRegion lr_parent;
+    const std::vector<field_id_t> field_id_vector;
+    Legion::LogicalRegion logical_region; 
+    Legion::LogicalRegion logical_region_parent;
   
   public:
     Region(IdxSpace<DIM> &ispace, FdSpace &fspace);
@@ -141,10 +141,10 @@ namespace LegionSimplified {
   class Partition {
   public:
     const context &ctx;
-    const std::vector<field_id_t> field_id_vec;
-    Legion::LogicalRegion lr_parent;
-    Legion::IndexPartition ip;
-    Legion::LogicalPartition lp;
+    const std::vector<field_id_t> field_id_vector;
+    Legion::LogicalRegion logical_region_parent;
+    Legion::IndexPartition index_partition;
+    Legion::LogicalPartition logical_partition;
   
   public:
     Partition(enum partition_type p_type, Region<DIM> &r, IdxSpace<DIM> &ispace);
@@ -164,7 +164,7 @@ namespace LegionSimplified {
    */  
   class Future {
   public:
-    Legion::Future fut;
+    Legion::Future future;
     
   public:  
     Future(void)
@@ -172,16 +172,16 @@ namespace LegionSimplified {
     }
     Future(Legion::Future f)
     {
-      fut = f;
+      future = f;
     }
     template<typename T>
     T get(void)
     {
-      return fut.get_result<T>();
+      return future.get_result<T>();
     }
     void get(void)
     {
-      return fut.get_void_result();
+      return future.get_void_result();
     }
   };
 
@@ -191,7 +191,7 @@ namespace LegionSimplified {
    */
   class FutureMap {
   public:  
-    Legion::FutureMap fm;
+    Legion::FutureMap future_map;
     
   public:
     FutureMap(void)
@@ -199,12 +199,12 @@ namespace LegionSimplified {
     }
     FutureMap(Legion::FutureMap f) 
     { 
-      fm = f; 
+      future_map = f; 
     }
     template<typename T, size_t DIM>
     T get(const Point<DIM> &point)
     { 
-      Future fu(fm.get_future(point)); 
+      Future fu(future_map.get_future(point)); 
       return fu.get<T>();
     }
     template<typename T>
@@ -232,7 +232,7 @@ namespace LegionSimplified {
 
     void wait(void) 
     {
-      fm.wait_all_results(); 
+      future_map.wait_all_results(); 
     } 
   };
 
@@ -302,9 +302,9 @@ unsigned int references;
   class BaseRegionImpl {
   public:
     const context ctx;
-    Legion::LogicalRegion lr;  // mutually exclusive with lp
-    Legion::LogicalPartition lp; // mutually exclusive with lr
-    Legion::LogicalRegion lr_parent;
+    Legion::LogicalRegion logical_region;  // mutually exclusive with lp
+    Legion::LogicalPartition logical_partition; // mutually exclusive with lr
+    Legion::LogicalRegion logical_region_parent;
     int is_mapped;
     Legion::Domain domain;
     Legion::PhysicalRegion physical_region;

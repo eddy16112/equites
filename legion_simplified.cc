@@ -14,20 +14,20 @@ namespace LegionSimplified {
   //----------------------------------public-------------------------------------
   FdSpace::FdSpace(const context& c) : ctx(c)
   {
-    fs = c.runtime->create_field_space(c.ctx);
-    allocator = c.runtime->create_field_allocator(c.ctx, fs);
-    field_id_vec.clear();
+    field_space = c.runtime->create_field_space(c.ctx);
+    allocator = c.runtime->create_field_allocator(c.ctx, field_space);
+    field_id_vector.clear();
   }
 
   FdSpace::~FdSpace(void)
   {
-    ctx.runtime->destroy_field_space(ctx.ctx, fs);
+    ctx.runtime->destroy_field_space(ctx.ctx, field_space);
   }
   
-  void FdSpace::add_field(size_t size, field_id_t fid)
+  void FdSpace::add_field(size_t size, field_id_t field_id)
   {
-    allocator.allocate_field(size,fid);
-    field_id_vec.push_back(fid);
+    allocator.allocate_field(size,field_id);
+    field_id_vector.push_back(field_id);
   }
   
   /////////////////////////////////////////////////////////////
@@ -37,15 +37,15 @@ namespace LegionSimplified {
   //----------------------------------public-------------------------------------
   BaseRegionImpl::BaseRegionImpl(const context ctx) :
     ctx(ctx), 
-    lr(Legion::LogicalRegion::NO_REGION), 
-    lp(Legion::LogicalPartition::NO_PART), 
-    lr_parent(Legion::LogicalRegion::NO_REGION),
+    logical_region(Legion::LogicalRegion::NO_REGION), 
+    logical_partition(Legion::LogicalPartition::NO_PART), 
+    logical_region_parent(Legion::LogicalRegion::NO_REGION),
     is_mapped(PR_NOT_MAPPED)
   {
     DEBUG_PRINT((2, "BaseRegionImpl(shared_ptr) constructor %p\n", this));
-    lr = Legion::LogicalRegion::NO_REGION;
-    lp = Legion::LogicalPartition::NO_PART;
-    lr_parent = Legion::LogicalRegion::NO_REGION;
+    logical_region = Legion::LogicalRegion::NO_REGION;
+    logical_partition = Legion::LogicalPartition::NO_PART;
+    logical_region_parent = Legion::LogicalRegion::NO_REGION;
     is_mapped = PR_NOT_MAPPED;
     field_id_vector.clear();
     accessor_map.clear();
@@ -55,9 +55,9 @@ namespace LegionSimplified {
   BaseRegionImpl::~BaseRegionImpl(void)
   {
     DEBUG_PRINT((2, "BaseRegionImpl(shared_ptr) destructor %p\n", this));
-    lr = Legion::LogicalRegion::NO_REGION;
-    lp = Legion::LogicalPartition::NO_PART;
-    lr_parent = Legion::LogicalRegion::NO_REGION;
+    logical_region = Legion::LogicalRegion::NO_REGION;
+    logical_partition = Legion::LogicalPartition::NO_PART;
+    logical_region_parent = Legion::LogicalRegion::NO_REGION;
     std::map<field_id_t, unsigned char*>::iterator it; 
     for (it = accessor_map.begin(); it != accessor_map.end(); it++) {
       if (it->second != nullptr) {
