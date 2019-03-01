@@ -65,7 +65,7 @@ void print_value(context c, RW_Region<1> region_xy){
   
   auto ro_xy = RO_Partition<1>(input_lp);
   */
-  auto ro_xy = region_xy.create_ro_partition(color_is);
+  auto ro_xy = region_xy.create_ro_partition(equal, color_is);
   runtime.execute_task(print_value_2, c, color_is, ro_xy);
   
   printf("end print value\n");

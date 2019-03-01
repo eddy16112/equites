@@ -121,7 +121,8 @@ namespace LegionSimplified {
   class Region {
   public:
     const context &ctx;
-    const std::vector<field_id_t> field_id_vector;
+    bool freeable; 
+    std::vector<field_id_t> field_id_vector;
     Legion::LogicalRegion logical_region; 
     Legion::LogicalRegion logical_region_parent;
   
@@ -141,7 +142,7 @@ namespace LegionSimplified {
   class Partition {
   public:
     const context &ctx;
-    const std::vector<field_id_t> field_id_vector;
+    std::vector<field_id_t> field_id_vector;
     Legion::LogicalRegion logical_region_parent;
     Legion::IndexPartition index_partition;
     Legion::LogicalPartition logical_partition;
@@ -156,6 +157,11 @@ namespace LegionSimplified {
     Region<DIM> get_subregion_by_color(int color);
     
     Region<DIM> operator[] (int color);
+    
+  private:
+    void create_partition_internal(enum partition_type p_type, IdxSpace<DIM> &ispace);
+    
+    
   };
 
   /**
@@ -342,14 +348,6 @@ unsigned int references;
   
     Base_Region(const Base_Region &rhs);
   
-    Base_Region(Region<DIM> &r, std::vector<field_id_t> &task_field_id_vec);
-  
-    Base_Region(Region<DIM> &r);
-  
-    Base_Region(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec);
-  
-    Base_Region(Partition<DIM> &par);
-  
     ~Base_Region(void);
   
     Base_Region & operator=(const Base_Region &rhs);
@@ -371,6 +369,8 @@ unsigned int references;
     void if_mapped(void);
     
     Region<DIM> get_region(void);
+    
+    void deep_copy_base_region(Base_Region<DIM> &base_region, Legion::LogicalRegion lr);
   
     class iterator: public Legion::PointInDomainIterator<DIM>{
     public: 
@@ -421,6 +421,19 @@ unsigned int references;
     {
       return iterator(false);
     }
+    
+  protected:
+    void init_region(Region<DIM> &r, std::vector<field_id_t> &task_field_id_vec);
+  
+    void init_region(Region<DIM> &r);
+  
+    void init_partition(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec);
+  
+    void init_partition(Partition<DIM> &par);
+    
+    void init_region_internal(const context ctx, Legion::LogicalRegion lr, Legion::LogicalRegion lr_parent, std::vector<field_id_t> &task_field_id_vec);
+    
+    void init_partition_internal(const context ctx, Legion::LogicalPartition lp, Legion::LogicalRegion lr_parent, std::vector<field_id_t> &task_field_id_vec);
   
   private:  
     void init_parameters(void);
@@ -442,10 +455,6 @@ unsigned int references;
     RO_Region(Region<DIM> &r, std::vector<field_id_t> &task_field_id_vec);
   
     RO_Region(Region<DIM> &r);
-  
-    RO_Region(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec);
-  
-    RO_Region(Partition<DIM> &par);
   
     ~RO_Region(void);
 
@@ -478,10 +487,6 @@ unsigned int references;
     WD_Region(Region<DIM> &r, std::vector<field_id_t> &task_field_id_vec);
   
     WD_Region(Region<DIM> &r);
-  
-    WD_Region(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec);
-  
-    WD_Region(Partition<DIM> &par);
   
     ~WD_Region(void);
     
@@ -518,10 +523,6 @@ unsigned int references;
   
     RW_Region(Region<DIM> &r);
   
-    RW_Region(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec);
-    
-    RW_Region(Partition<DIM> &par);
-  
     ~RW_Region(void);
     
     template< typename a>
@@ -536,7 +537,7 @@ unsigned int references;
     template< typename a>
     void write(Legion::Point<DIM> i, a x);
     
-    RO_Partition<DIM> create_ro_partition(IdxSpace<DIM> ispace);
+    RO_Partition<DIM> create_ro_partition(enum partition_type p_type, IdxSpace<DIM> &ispace);
   
   protected:
     void init_rw_parameters(void);
@@ -561,6 +562,8 @@ unsigned int references;
     RO_Partition(enum partition_type p_type, RW_Region<DIM> &rw_region, IdxSpace<DIM> &ispace );
   
     ~RO_Partition(void);
+    
+    RO_Region<DIM> get_ro_subregion_by_color(int color);
   };
   
   template <size_t DIM>
@@ -573,6 +576,8 @@ unsigned int references;
     WD_Partition(Partition<DIM> &par);
   
     ~WD_Partition(void);
+    
+    WD_Region<DIM> get_wd_subregion_by_color(int color);
   };
   
   template <size_t DIM>

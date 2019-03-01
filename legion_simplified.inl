@@ -42,7 +42,7 @@ namespace LegionSimplified {
   //----------------------------------public-------------------------------------
   template <size_t DIM>
   Region<DIM>::Region(IdxSpace<DIM> &ispace, FdSpace &fspace) : 
-    ctx(fspace.ctx), field_id_vector(fspace.field_id_vector)
+    ctx(fspace.ctx), freeable(true), field_id_vector(fspace.field_id_vector)
   {
     DEBUG_PRINT((4, "Region constructor %p\n", this));
     logical_region = ctx.runtime->create_logical_region(ctx.ctx, ispace.index_space, fspace.field_space);
@@ -51,7 +51,7 @@ namespace LegionSimplified {
   
   template <size_t DIM>
   Region<DIM>::Region(const context &c, const std::vector<field_id_t> &field_id_vec, Legion::LogicalRegion &lr, Legion::LogicalRegion &lr_parent) :
-    ctx(c), field_id_vector(field_id_vec), logical_region(lr), logical_region_parent(lr_parent)
+    ctx(c), freeable(true), field_id_vector(field_id_vec), logical_region(lr), logical_region_parent(lr_parent)
   {
     DEBUG_PRINT((4, "Region constructor all %p\n", this));
   }
@@ -61,8 +61,8 @@ namespace LegionSimplified {
   {
     DEBUG_PRINT((4, "Region destructor %p\n", this));
     // if I am the parent logical region, then destroy it.
-    if (logical_region == logical_region_parent) {
-      DEBUG_PRINT((4, "Region destructor destroy lr %p\n", this));
+    if (logical_region == logical_region_parent && freeable == true) {
+      DEBUG_PRINT((4, "Region %p destructor destroy lr %d, lr_parent %d\n", this, logical_region.get_tree_id(), logical_region_parent.get_tree_id()));
       ctx.runtime->destroy_logical_region(ctx.ctx, logical_region);
     }
   }
@@ -74,16 +74,15 @@ namespace LegionSimplified {
   //----------------------------------public-------------------------------------
   template <size_t DIM>
   Partition<DIM>::Partition(enum partition_type p_type, Region<DIM> &r, IdxSpace<DIM> &ispace) : 
-    ctx(r.ctx), field_id_vector(r.field_id_vector), logical_region_parent(r.logical_region_parent)
+    ctx(r.ctx), field_id_vector(r.field_id_vector), logical_region_parent(r.logical_region)
   {
-    index_partition = ctx.runtime->create_equal_partition(ctx.ctx, r.logical_region.get_index_space(), ispace.index_space);
-    logical_partition = ctx.runtime->get_logical_partition(ctx.ctx, r.logical_region, index_partition);
+    create_partition_internal(p_type, ispace);
   }
   
   template <size_t DIM>
   Partition<DIM>::Partition(enum partition_type p_type, Region<DIM> &r, IdxSpace<DIM> &ispace, 
     Legion::DomainTransform &dt, Rect<DIM> &rect) : 
-    ctx(r.ctx), field_id_vector(r.field_id_vector), logical_region_parent(r.logical_region_parent)
+    ctx(r.ctx), field_id_vector(r.field_id_vector), logical_region_parent(r.logical_region)
   {
     index_partition = ctx.runtime->create_partition_by_restriction(ctx.ctx, r.logical_region.get_index_space(), ispace.index_space, dt, rect);
     logical_partition = ctx.runtime->get_logical_partition(ctx.ctx, r.logical_region, index_partition);
@@ -109,6 +108,14 @@ namespace LegionSimplified {
     return get_subregion_by_color(color); 
   }
   
+  //----------------------------------private-------------------------------------
+  template <size_t DIM>
+  void Partition<DIM>::create_partition_internal(enum partition_type p_type, IdxSpace<DIM> &ispace)
+  {
+    index_partition = ctx.runtime->create_equal_partition(ctx.ctx, logical_region_parent.get_index_space(), ispace.index_space);
+    logical_partition = ctx.runtime->get_logical_partition(ctx.ctx, logical_region_parent, index_partition);
+  }
+  
   /////////////////////////////////////////////////////////////
   // Base_Region 
   /////////////////////////////////////////////////////////////
@@ -128,72 +135,6 @@ namespace LegionSimplified {
     init_parameters();
     this->base_region_impl = rhs.base_region_impl;
     this->pm = rhs.pm;
-  }
-
-  template <size_t DIM>
-  Base_Region<DIM>::Base_Region(Region<DIM> &r, std::vector<field_id_t> &task_field_id_vec) 
-  {
-    DEBUG_PRINT((4, "Base_Region Region/field constructor %p\n", this));
-    init_parameters();
-    base_region_impl = std::make_shared<BaseRegionImpl>(r.ctx);
-    base_region_impl->logical_region = r.logical_region;
-    base_region_impl->logical_region_parent = r.logical_region_parent;
-    std::vector<field_id_t>::const_iterator it; 
-    for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
-       printf("base set fid %d\n", *it);
-       base_region_impl->field_id_vector.push_back(*it); 
-    }
-    base_region_impl->domain = base_region_impl->ctx.runtime->get_index_space_domain(base_region_impl->ctx.ctx, base_region_impl->logical_region.get_index_space());
-  }
-
-  template <size_t DIM>
-  Base_Region<DIM>::Base_Region(Region<DIM> &r) 
-  {
-    DEBUG_PRINT((4, "Base_Region Region constructor %p\n", this));
-    init_parameters();
-    base_region_impl = std::make_shared<BaseRegionImpl>(r.ctx);
-    base_region_impl->logical_region = r.logical_region;
-    base_region_impl->logical_region_parent = r.logical_region_parent;
-    const std::vector<field_id_t> &task_field_id_vec = r.field_id_vector;
-    std::vector<field_id_t>::const_iterator it; 
-    for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
-       DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));
-       base_region_impl->field_id_vector.push_back(*it); 
-    }
-    base_region_impl->domain = base_region_impl->ctx.runtime->get_index_space_domain(base_region_impl->ctx.ctx, base_region_impl->logical_region.get_index_space());
-  }
-
-  template <size_t DIM>
-  Base_Region<DIM>::Base_Region(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec)
-  {
-    DEBUG_PRINT((4, "Base_Region Partition/field constructor %p\n", this));
-    init_parameters();
-    base_region_impl = std::make_shared<BaseRegionImpl>(par.ctx);
-    base_region_impl->logical_partition = par.logical_partition;
-    base_region_impl->logical_region_parent = par.logical_region_parent;
-    std::vector<field_id_t>::const_iterator it; 
-    for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
-       DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));
-       base_region_impl->field_id_vector.push_back(*it); 
-    }
-    //base_region_impl->domain = ctx->runtime->get_index_space_domain(ctx->ctx, base_region_impl->lr.get_index_space());
-  }
-
-  template <size_t DIM>
-  Base_Region<DIM>::Base_Region(Partition<DIM> &par)
-  {
-    DEBUG_PRINT((4, "Base_Region Partition constructor %p\n", this));
-    init_parameters();
-    base_region_impl = std::make_shared<BaseRegionImpl>(par.ctx);
-    base_region_impl->logical_partition = par.logical_partition;
-    base_region_impl->logical_region_parent = par.logical_region_parent;
-    const std::vector<field_id_t> &task_field_id_vec = par.field_id_vector;
-    std::vector<field_id_t>::const_iterator it; 
-    for (it = task_field_id_vec.cbegin(); it != task_field_id_vec.cend(); it++) {
-       DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));
-       base_region_impl->field_id_vector.push_back(*it); 
-    }
-   // base_region_impl->domain = ctx->runtime->get_index_space_domain(ctx->ctx, base_region_impl->lr.get_index_space());
   }
   
   template <size_t DIM>
@@ -360,7 +301,76 @@ namespace LegionSimplified {
   {
     // fixme 
     Region<DIM> region = Region<DIM>(base_region_impl->ctx, base_region_impl->field_id_vector, base_region_impl->logical_region, base_region_impl->logical_region_parent);
+    region.freeable = false;
     return region;
+  }
+  
+  template <size_t DIM>
+  void Base_Region<DIM>::deep_copy_base_region(Base_Region<DIM> &base_region, Legion::LogicalRegion lr)
+  {
+    init_region_internal(base_region.base_region_impl->ctx, 
+        lr,
+        base_region.base_region_impl->logical_region_parent, 
+        base_region.base_region_impl->field_id_vector);
+  }
+  
+  //----------------------------------protected-------------------------------------
+  template <size_t DIM>
+  void Base_Region<DIM>::init_region(Region<DIM> &r, std::vector<field_id_t> &task_field_id_vec) 
+  {
+    DEBUG_PRINT((4, "Base_Region init_region/field %p\n", this));
+    init_region_internal(r.ctx, r.logical_region, r.logical_region_parent, task_field_id_vec);
+  }
+
+  template <size_t DIM>
+  void Base_Region<DIM>::init_region(Region<DIM> &r) 
+  {
+    DEBUG_PRINT((4, "Base_Region init_region %p\n", this));
+    init_region_internal(r.ctx, r.logical_region, r.logical_region_parent, r.field_id_vector);
+  }
+
+  template <size_t DIM>
+  void Base_Region<DIM>::init_partition(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec)
+  {
+    DEBUG_PRINT((4, "Base_Region init_partition/field %p\n", this));
+    init_partition_internal(par.ctx, par.logical_partition, par.logical_region_parent, task_field_id_vec);
+  }
+
+  template <size_t DIM>
+  void Base_Region<DIM>::init_partition(Partition<DIM> &par)
+  {
+    DEBUG_PRINT((4, "Base_Region init_partition %p\n", this));
+    init_partition_internal(par.ctx, par.logical_partition, par.logical_region_parent, par.field_id_vector);
+  }
+  
+  template <size_t DIM>
+  void Base_Region<DIM>::init_region_internal(const context ctx, Legion::LogicalRegion lr, Legion::LogicalRegion lr_parent, std::vector<field_id_t> &task_field_id_vec) 
+  {
+    assert(base_region_impl == nullptr);
+    base_region_impl = std::make_shared<BaseRegionImpl>(ctx);
+    base_region_impl->logical_region = lr;
+    base_region_impl->logical_region_parent = lr_parent;
+    std::vector<field_id_t>::iterator it; 
+    for (it = task_field_id_vec.begin(); it != task_field_id_vec.end(); it++) {
+       printf("base set fid %d\n", *it);
+       base_region_impl->field_id_vector.push_back(*it); 
+    }
+    base_region_impl->domain = base_region_impl->ctx.runtime->get_index_space_domain(base_region_impl->ctx.ctx, base_region_impl->logical_region.get_index_space());
+  }
+  
+  template <size_t DIM>
+  void Base_Region<DIM>::init_partition_internal(const context ctx, Legion::LogicalPartition lp, Legion::LogicalRegion lr_parent, std::vector<field_id_t> &task_field_id_vec)
+  {
+    assert(base_region_impl == nullptr);
+    base_region_impl = std::make_shared<BaseRegionImpl>(ctx);
+    base_region_impl->logical_partition = lp;
+    base_region_impl->logical_region_parent = lr_parent;
+    std::vector<field_id_t>::iterator it; 
+    for (it = task_field_id_vec.begin(); it != task_field_id_vec.end(); it++) {
+       DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));
+       base_region_impl->field_id_vector.push_back(*it); 
+    }
+    //base_region_impl->domain = ctx->runtime->get_index_space_domain(ctx->ctx, base_region_impl->lr.get_index_space());
   }
   
   //----------------------------------private-------------------------------------
@@ -383,35 +393,25 @@ namespace LegionSimplified {
   
   //----------------------------------public-------------------------------------
   template <size_t DIM>
-  RO_Region<DIM>::RO_Region(void) : Base_Region<DIM>()
+  RO_Region<DIM>::RO_Region(void)
+    : Base_Region<DIM>()
   {
+    init_ro_parameters();
   }
   
   template <size_t DIM>
   RO_Region<DIM>::RO_Region(Region<DIM> &r, std::vector<field_id_t> &task_field_id_vec) 
-    : Base_Region<DIM>(r, task_field_id_vec)
+    : Base_Region<DIM>()
   {
+    Base_Region<DIM>::init_region(r, task_field_id_vec);
     init_ro_parameters();
   }
 
   template <size_t DIM>
   RO_Region<DIM>::RO_Region(Region<DIM> &r) 
-    : Base_Region<DIM>(r)
+    : Base_Region<DIM>()
   {
-    init_ro_parameters();
-  }
-
-  template <size_t DIM>
-  RO_Region<DIM>::RO_Region(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec) 
-    : Base_Region<DIM>(par, task_field_id_vec)
-  {
-    init_ro_parameters();
-  }
-
-  template <size_t DIM>
-  RO_Region<DIM>::RO_Region(Partition<DIM> &par) 
-    : Base_Region<DIM>(par)
-  {
+    Base_Region<DIM>::init_region(r);
     init_ro_parameters();
   }
 
@@ -483,34 +483,25 @@ namespace LegionSimplified {
   
   //----------------------------------public-------------------------------------
   template <size_t DIM>
-  WD_Region<DIM>::WD_Region(void) : Base_Region<DIM>()
+  WD_Region<DIM>::WD_Region(void) 
+    : Base_Region<DIM>()
   {
+    init_wd_parameters();
   }
 
   template <size_t DIM>
   WD_Region<DIM>::WD_Region(Region<DIM> &r, std::vector<field_id_t> &task_field_id_vec) 
-    : Base_Region<DIM>(r, task_field_id_vec)
+    : Base_Region<DIM>()
   {
+    Base_Region<DIM>::init_region(r, task_field_id_vec);
     init_wd_parameters();
   }
 
   template <size_t DIM>
-  WD_Region<DIM>::WD_Region(Region<DIM> &r) : Base_Region<DIM>(r)
+  WD_Region<DIM>::WD_Region(Region<DIM> &r) 
+    : Base_Region<DIM>()
   {
-    init_wd_parameters();
-  }
-
-  template <size_t DIM>
-  WD_Region<DIM>::WD_Region(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec) 
-    : Base_Region<DIM>(par, task_field_id_vec)
-  {
-    init_wd_parameters();
-  }
-
-  template <size_t DIM>
-  WD_Region<DIM>::WD_Region(Partition<DIM> &par) 
-    : Base_Region<DIM>(par)
-  {
+    Base_Region<DIM>::init_region(r);
     init_wd_parameters();
   }
 
@@ -585,33 +576,22 @@ namespace LegionSimplified {
   RW_Region<DIM>::RW_Region(void) 
     : Base_Region<DIM>()
   {
+    init_rw_parameters();
   }
 
   template <size_t DIM>
   RW_Region<DIM>::RW_Region(Region<DIM> &r, std::vector<field_id_t> &task_field_id_vec) 
-    : Base_Region<DIM>(r, task_field_id_vec)
+    : Base_Region<DIM>()
   {
+    Base_Region<DIM>::init_region(r, task_field_id_vec);
     init_rw_parameters();
   }
 
   template <size_t DIM>
   RW_Region<DIM>::RW_Region(Region<DIM> &r) 
-    : Base_Region<DIM>(r)
+    : Base_Region<DIM>()
   {
-    init_rw_parameters();
-  }
-
-  template <size_t DIM>
-  RW_Region<DIM>::RW_Region(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec) 
-    : Base_Region<DIM>(par, task_field_id_vec)
-  {
-    init_rw_parameters();
-  }
-
-  template <size_t DIM>
-  RW_Region<DIM>::RW_Region(Partition<DIM> &par) 
-    : Base_Region<DIM>(par)
-  {
+    Base_Region<DIM>::init_region(r);
     init_rw_parameters();
   }
 
@@ -663,11 +643,10 @@ namespace LegionSimplified {
   }
   
   template <size_t DIM>
-  RO_Partition<DIM> RW_Region<DIM>::create_ro_partition(IdxSpace<DIM> ispace)
+  RO_Partition<DIM> RW_Region<DIM>::create_ro_partition(enum partition_type p_type, IdxSpace<DIM> &ispace)
   {
     Region<1> r = Base_Region<DIM>::get_region();
     Partition<1> par(equal, r, ispace);
-  
     auto ro_par = RO_Partition<1>(par);
     return ro_par;
   }
@@ -714,27 +693,40 @@ namespace LegionSimplified {
   
   //----------------------------------public-------------------------------------
   template <size_t DIM>
-  RO_Partition<DIM>::RO_Partition(void) : RO_Region<DIM>()
+  RO_Partition<DIM>::RO_Partition(void) 
+    : RO_Region<DIM>()
   {
+    assert(this->pm = READ_ONLY);
   }
 
   template <size_t DIM>
   RO_Partition<DIM>::RO_Partition(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec) 
-    : RO_Region<DIM>(par, task_field_id_vec)
+    : RO_Region<DIM>()
   {
-    RO_Region<DIM>::init_ro_parameters();
+    Base_Region<DIM>::init_partition(par, task_field_id_vec);
+    assert(this->pm = READ_ONLY);
   }
 
   template <size_t DIM>
   RO_Partition<DIM>::RO_Partition(Partition<DIM> &par) 
-    : RO_Region<DIM>(par)
+    : RO_Region<DIM>()
   {
-    RO_Region<DIM>::init_ro_parameters();
+    Base_Region<DIM>::init_partition(par);
+    assert(this->pm = READ_ONLY);
   }
 
   template <size_t DIM>
   RO_Partition<DIM>::~RO_Partition(void)
   {
+  }
+  
+  template <size_t DIM>
+  RO_Region<DIM> RO_Partition<DIM>::get_ro_subregion_by_color(int color)
+  {
+    Legion::LogicalRegion sub_lr = this->base_region_impl->ctx.runtime->get_logical_subregion_by_color(this->base_region_impl->ctx.ctx, this->base_region_impl->logical_partition, color);
+    RO_Region<DIM> ro_region;
+    ro_region.deep_copy_base_region(*this, sub_lr);
+    return ro_region;
   }
   
   /////////////////////////////////////////////////////////////
@@ -743,27 +735,40 @@ namespace LegionSimplified {
   
   //----------------------------------public-------------------------------------
   template <size_t DIM>
-  WD_Partition<DIM>::WD_Partition(void) : WD_Region<DIM>()
+  WD_Partition<DIM>::WD_Partition(void) 
+    : WD_Region<DIM>()
   {
+    assert(this->pm = WRITE_DISCARD);
   }
 
   template <size_t DIM>
   WD_Partition<DIM>::WD_Partition(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec) 
-    : WD_Region<DIM>(par, task_field_id_vec)
+    : WD_Region<DIM>()
   {
-    WD_Region<DIM>::init_wd_parameters();
+    Base_Region<DIM>::init_partition(par, task_field_id_vec);
+    assert(this->pm = WRITE_DISCARD);
   }
 
   template <size_t DIM>
   WD_Partition<DIM>::WD_Partition(Partition<DIM> &par) 
-    : WD_Region<DIM>(par)
+    : WD_Region<DIM>()
   {
-    WD_Region<DIM>::init_wd_parameters();
+    Base_Region<DIM>::init_partition(par);
+    assert(this->pm = WRITE_DISCARD);
   }
 
   template <size_t DIM>
   WD_Partition<DIM>::~WD_Partition(void)
   {
+  }
+  
+  template <size_t DIM>
+  WD_Region<DIM> WD_Partition<DIM>::get_wd_subregion_by_color(int color)
+  {
+    Legion::LogicalRegion sub_lr = this->base_region_impl->ctx.runtime->get_logical_subregion_by_color(this->base_region_impl->ctx.ctx, this->base_region_impl->logical_partition, color);
+    WD_Region<DIM> wd_region;
+    wd_region.deep_copy_base_region(*this, sub_lr);
+    return wd_region;
   }
   
   /////////////////////////////////////////////////////////////
@@ -772,22 +777,26 @@ namespace LegionSimplified {
   
   //----------------------------------public-------------------------------------
   template <size_t DIM>
-  RW_Partition<DIM>::RW_Partition(void) : RW_Region<DIM>()
+  RW_Partition<DIM>::RW_Partition(void) 
+    : RW_Region<DIM>()
   {
+    assert(this->pm = READ_WRITE);
   }
 
   template <size_t DIM>
   RW_Partition<DIM>::RW_Partition(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec) 
-    : RW_Region<DIM>(par, task_field_id_vec)
+    : RW_Region<DIM>()
   {
-    RW_Region<DIM>::init_rw_parameters();
+    Base_Region<DIM>::init_partition(par, task_field_id_vec);
+    assert(this->pm = READ_WRITE);
   }
 
   template <size_t DIM>
   RW_Partition<DIM>::RW_Partition(Partition<DIM> &par) 
-    : RW_Region<DIM>(par)
+    : RW_Region<DIM>()
   {
-    RW_Region<DIM>::init_rw_parameters();
+    Base_Region<DIM>::init_partition(par);
+    assert(this->pm = READ_WRITE);
   }
 
   template <size_t DIM>

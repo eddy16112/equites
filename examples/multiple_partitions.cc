@@ -114,12 +114,12 @@ void top_level(context c)
   Partition<1> ghost_lp(restriction, stencil_lr, color_is, d_transform, extent);
   
   std::vector<field_id_t> val_vec{FID_VAL};
-  auto wd_val = WD_Region<1>(disjoint_lp, val_vec);
+  auto wd_val = WD_Partition<1>(disjoint_lp, val_vec);
   runtime.execute_task(init_field_task, c, color_is, wd_val);
   
   std::vector<field_id_t> deriv_vec{FID_DERIV};
-  auto ro_val = RO_Region<1>(ghost_lp, val_vec);
-  auto rw_deriv = RW_Region<1>(disjoint_lp, deriv_vec);
+  auto ro_val = RO_Partition<1>(ghost_lp, val_vec);
+  auto rw_deriv = RW_Partition<1>(disjoint_lp, deriv_vec);
   runtime.execute_task(stencil_task, c, color_is, num_elements, ro_val, rw_deriv);
   
   auto ro_all = RO_Region<1>(stencil_lr);

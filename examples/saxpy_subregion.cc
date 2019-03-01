@@ -82,12 +82,12 @@ void top_level(context c)
   Partition<1> output_lp(equal, output_lr, color_is);
   
   std::vector<field_id_t> x_vec{FID_X};
-  auto wd_x = WD_Region<1>(input_lp, x_vec);
+  auto wd_x = WD_Partition<1>(input_lp, x_vec);
   //printf("wd_x1 shared_ptr %p, use_count %ld\n", wd_x.base_region_impl.get(), wd_x.base_region_impl.use_count());
   runtime.execute_task(init_value, c, color_is, wd_x);
   
   std::vector<field_id_t> y_vec{FID_Y};
-  auto wd_y = WD_Region<1>(input_lp, y_vec);
+  auto wd_y = WD_Partition<1>(input_lp, y_vec);
   runtime.execute_task(init_value, c, color_is, wd_y);
 
   float alpha = 2;
@@ -96,9 +96,19 @@ void top_level(context c)
     //Region<1> subregion_z = output_lp.get_subregion_by_color(i);
     Region<1> subregion_xy = input_lp[i];
     Region<1> subregion_z = output_lp[i];
-    auto rw_subregion_xy = RO_Region<1>(subregion_xy);
+    auto ro_subregion_xy = RO_Region<1>(subregion_xy);
     auto wd_subregion_z = WD_Region<1>(subregion_z);
-    runtime.execute_task(saxpy, c, alpha, rw_subregion_xy, wd_subregion_z);
+    runtime.execute_task(saxpy, c, alpha, ro_subregion_xy, wd_subregion_z);
+  }
+  
+  auto ro_xy = RO_Partition<1>(input_lp);
+  auto wd_z = WD_Partition<1>(output_lp);
+  for (int i = 0; i < num_colors; i++) {
+   // Region<1> subregion_xy = input_lp.get_subregion_by_color(i);
+    //Region<1> subregion_z = output_lp.get_subregion_by_color(i);
+    RO_Region<1> ro_subregion_xy = ro_xy.get_ro_subregion_by_color(i);
+    WD_Region<1> wd_subregion_z = wd_z.get_wd_subregion_by_color(i);
+    runtime.execute_task(saxpy, c, alpha, ro_subregion_xy, wd_subregion_z);
   }
 
   
