@@ -662,6 +662,16 @@ namespace LegionSimplified {
     (*acc)[i] = x; 
   }
   
+  template <size_t DIM>
+  RO_Partition<DIM> RW_Region<DIM>::create_ro_partition(IdxSpace<DIM> ispace)
+  {
+    Region<1> r = Base_Region<DIM>::get_region();
+    Partition<1> par(equal, r, ispace);
+  
+    auto ro_par = RO_Partition<1>(par);
+    return ro_par;
+  }
+  
   //----------------------------------protected-------------------------------------
   template <size_t DIM>
   void RW_Region<DIM>::init_rw_parameters(void)

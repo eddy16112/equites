@@ -501,6 +501,9 @@ unsigned int references;
     template< typename a>
     Legion::FieldAccessor<WRITE_DISCARD, a, DIM>* get_default_accessor(void);
   };
+  
+  template <size_t DIM>
+  class RO_Partition;
 
   /**
    * \class RW_Region
@@ -532,6 +535,8 @@ unsigned int references;
   
     template< typename a>
     void write(Legion::Point<DIM> i, a x);
+    
+    RO_Partition<DIM> create_ro_partition(IdxSpace<DIM> ispace);
   
   protected:
     void init_rw_parameters(void);
@@ -552,6 +557,8 @@ unsigned int references;
     RO_Partition(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec);
   
     RO_Partition(Partition<DIM> &par);
+    
+    RO_Partition(enum partition_type p_type, RW_Region<DIM> &rw_region, IdxSpace<DIM> &ispace );
   
     ~RO_Partition(void);
   };

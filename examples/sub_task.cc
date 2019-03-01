@@ -58,11 +58,14 @@ void print_value(context c, RW_Region<1> region_xy){
     region_xy.write<float>(FID_Y, *pir, value);
   }
   
-  Region<1> input_lr = region_xy.get_region();
   IdxSpace<1> color_is(c, 2);
+  /*
+  Region<1> input_lr = region_xy.get_region();
   Partition<1> input_lp(equal, input_lr, color_is);
   
   auto ro_xy = RO_Partition<1>(input_lp);
+  */
+  auto ro_xy = region_xy.create_ro_partition(color_is);
   runtime.execute_task(print_value_2, c, color_is, ro_xy);
   
   printf("end print value\n");
