@@ -7,6 +7,8 @@ enum FieldIDs {
   FID_Z,
 };
 
+//#define SUBREGION_1
+
 void saxpy(context c, float alpha, RO_Region<1> region_xy, WD_Region<1> region_z){
   
   for(auto pir : region_xy) {
@@ -91,23 +93,20 @@ void top_level(context c)
   runtime.execute_task(init_value, c, color_is, wd_y);
 
   float alpha = 2;
+
   for (int i = 0; i < num_colors; i++) {
-   // Region<1> subregion_xy = input_lp.get_subregion_by_color(i);
-    //Region<1> subregion_z = output_lp.get_subregion_by_color(i);
     Region<1> subregion_xy = input_lp[i];
     Region<1> subregion_z = output_lp[i];
-    auto ro_subregion_xy = RO_Region<1>(subregion_xy);
-    auto wd_subregion_z = WD_Region<1>(subregion_z);
+    RO_Region<1> ro_subregion_xy = RO_Region<1>(subregion_xy);
+    WD_Region<1> wd_subregion_z = WD_Region<1>(subregion_z);
     runtime.execute_task(saxpy, c, alpha, ro_subregion_xy, wd_subregion_z);
   }
-  
+
   auto ro_xy = RO_Partition<1>(input_lp);
   auto wd_z = WD_Partition<1>(output_lp);
   for (int i = 0; i < num_colors; i++) {
-   // Region<1> subregion_xy = input_lp.get_subregion_by_color(i);
-    //Region<1> subregion_z = output_lp.get_subregion_by_color(i);
-    RO_Region<1> ro_subregion_xy = ro_xy.get_ro_subregion_by_color(i);
-    WD_Region<1> wd_subregion_z = wd_z.get_wd_subregion_by_color(i);
+    RO_Region<1> ro_subregion_xy = ro_xy[i];
+    WD_Region<1> wd_subregion_z = wd_z[i];
     runtime.execute_task(saxpy, c, alpha, ro_subregion_xy, wd_subregion_z);
   }
 

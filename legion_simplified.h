@@ -32,6 +32,13 @@ namespace LegionSimplified {
     equal,
     restriction,
   };
+  
+  enum access_type
+  {
+    RO,
+    WD,
+    RW,
+  };
 
   template <size_t DIM>  using Point = Legion::Point<DIM>;  
   template <size_t DIM>  using Rect = Legion::Rect<DIM>;  
@@ -430,12 +437,12 @@ unsigned int references;
     void init_partition(Partition<DIM> &par, std::vector<field_id_t> &task_field_id_vec);
   
     void init_partition(Partition<DIM> &par);
-    
+  
+  private:  
     void init_region_internal(const context ctx, Legion::LogicalRegion lr, Legion::LogicalRegion lr_parent, std::vector<field_id_t> &task_field_id_vec);
     
     void init_partition_internal(const context ctx, Legion::LogicalPartition lp, Legion::LogicalRegion lr_parent, std::vector<field_id_t> &task_field_id_vec);
-  
-  private:  
+    
     void init_parameters(void);
   
     void check_empty(void);
@@ -564,6 +571,8 @@ unsigned int references;
     ~RO_Partition(void);
     
     RO_Region<DIM> get_ro_subregion_by_color(int color);
+    
+    RO_Region<DIM> operator[] (int color);
   };
   
   template <size_t DIM>
@@ -578,6 +587,8 @@ unsigned int references;
     ~WD_Partition(void);
     
     WD_Region<DIM> get_wd_subregion_by_color(int color);
+    
+    WD_Region<DIM> operator[] (int color);
   };
   
   template <size_t DIM>
@@ -590,6 +601,10 @@ unsigned int references;
     RW_Partition(Partition<DIM> &par);
   
     ~RW_Partition(void);
+    
+    WD_Region<DIM> get_wd_subregion_by_color(int color);
+    
+    RO_Region<DIM> get_ro_subregion_by_color(int color);
   };
 
 //-----------------------------------------------------------------------------

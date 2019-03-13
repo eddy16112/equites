@@ -7,7 +7,7 @@ enum FieldIDs {
   FID_Z,
 };
 
-void saxpy(context c, float alpha, RO_Region<1> region_xy, WD_Region<1> region_z){
+void saxpy(context c, RO_Region<1> region_xy, WD_Region<1> region_z, float alpha){
   for(auto pir : region_xy) {
     float x = region_xy.read<float>(FID_X, pir);
     float y = region_xy.read<float>(FID_Y, pir);
@@ -64,8 +64,11 @@ void check(context c, float alpha, RO_Region<1> region_xy, RO_Region<1> region_z
 
 void top_level(context c)
 { 
-  IdxSpace<1> ispace(c, 120);
-  IdxSpace<1> color_is(c, 4);
+  int num_elements = 1024; 
+  int num_subregions = 4;
+  
+  IdxSpace<1> ispace(c, num_elements);
+  IdxSpace<1> color_is(c, num_subregions);
   
   FdSpace input_fs(c);
   input_fs.add_field<float>(FID_X);
@@ -81,17 +84,16 @@ void top_level(context c)
   
   std::vector<field_id_t> x_vec{FID_X};
   auto wd_x = WD_Partition<1>(input_lp, x_vec);
-  //printf("wd_x1 shared_ptr %p, use_count %ld\n", wd_x.base_region_impl.get(), wd_x.base_region_impl.use_count());
   runtime.execute_task(init_value, c, color_is, wd_x);
   
   std::vector<field_id_t> y_vec{FID_Y};
   auto wd_y = WD_Partition<1>(input_lp, y_vec);
   runtime.execute_task(init_value, c, color_is, wd_y);
 
-  float alpha = 2;
+  const float alpha = 2.0;
   auto rw_xy = RO_Partition<1>(input_lp);
   auto wd_z = WD_Partition<1>(output_lp);
-  runtime.execute_task(saxpy, c, color_is, alpha, rw_xy, wd_z);
+  runtime.execute_task(saxpy, c, color_is, rw_xy, wd_z, alpha);
 
   auto ro_xy_all = RO_Region<1>(input_lr);
   auto ro_z_all = RO_Region<1>(output_lr);
@@ -101,8 +103,8 @@ void top_level(context c)
 
 int main(int argc, char** argv){
   runtime.register_task<decltype(&top_level), top_level>("top_level");
+  runtime.register_task<decltype(&init_value), init_value>("init_value", true);
   runtime.register_task<decltype(&saxpy), saxpy>("saxpy", true);
   runtime.register_task<decltype(&check), check>("check", true);
-  runtime.register_task<decltype(&init_value), init_value>("init_value", true);
-  runtime.start(top_level, argc, argv);
+  return runtime.start(top_level, argc, argv);
 }
