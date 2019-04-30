@@ -605,6 +605,9 @@ unsigned int references;
     WD_Region<DIM> get_wd_subregion_by_color(int color);
     
     RO_Region<DIM> get_ro_subregion_by_color(int color);
+    
+    //template <typename T>
+    //T<DIM> get_subregion_by_color(int color);
   };
 
 //-----------------------------------------------------------------------------

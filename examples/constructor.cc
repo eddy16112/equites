@@ -4,7 +4,6 @@ using namespace LegionSimplified;
 enum FieldIDs {
   FID_X = 3,
   FID_Y,
-  FID_Z,
 };
 
 void top_level(context c)
@@ -21,11 +20,16 @@ void top_level(context c)
   Partition<1> input_lp(equal, input_lr, color_is);
   
   std::vector<field_id_t> x_vec{FID_X};
-  auto wd_x = WD_Partition<1>(input_lp, x_vec);
-
+  auto rw_x_par = RW_Partition<1>(input_lp, x_vec);
+  printf("!create rw_x_par done\n");
+  
+  auto ro_x_sub_1 = rw_x_par.get_ro_subregion_by_color(0);
+  printf("!create ro_x_sub_1 done\n");
 
   auto rw_xy = RW_Region<1>(input_lr);
+  printf("!create rw_xy done\n");
   auto rw_xy_par = rw_xy.create_ro_partition(equal, color_is2);
+  printf("!create rw_xy_par done\n");
   
 }
 

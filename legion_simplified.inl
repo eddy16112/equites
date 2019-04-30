@@ -353,7 +353,7 @@ namespace LegionSimplified {
     base_region_impl->logical_region_parent = lr_parent;
     std::vector<field_id_t>::iterator it; 
     for (it = task_field_id_vec.begin(); it != task_field_id_vec.end(); it++) {
-       printf("base set fid %d\n", *it);
+       DEBUG_PRINT((6, "Base_Region %p, init_region_internal set fid %d\n", this, *it));
        base_region_impl->field_id_vector.push_back(*it); 
     }
     base_region_impl->domain = base_region_impl->ctx.runtime->get_index_space_domain(base_region_impl->ctx.ctx, base_region_impl->logical_region.get_index_space());
@@ -368,7 +368,7 @@ namespace LegionSimplified {
     base_region_impl->logical_region_parent = lr_parent;
     std::vector<field_id_t>::iterator it; 
     for (it = task_field_id_vec.begin(); it != task_field_id_vec.end(); it++) {
-       DEBUG_PRINT((6, "Base_Region %p, set fid %d\n", this, *it));
+       DEBUG_PRINT((6, "Base_Region %p, init_partition_internal set fid %d\n", this, *it));
        base_region_impl->field_id_vector.push_back(*it); 
     }
     //base_region_impl->domain = ctx->runtime->get_index_space_domain(ctx->ctx, base_region_impl->lr.get_index_space());
@@ -645,9 +645,9 @@ namespace LegionSimplified {
   template <size_t DIM>
   RO_Partition<DIM> RW_Region<DIM>::create_ro_partition(enum partition_type p_type, IdxSpace<DIM> &ispace)
   {
-    Region<1> r = Base_Region<DIM>::get_region();
-    Partition<1> par(equal, r, ispace);
-    auto ro_par = RO_Partition<1>(par);
+    Region<DIM> r = Base_Region<DIM>::get_region();
+    Partition<DIM> par(equal, r, ispace);
+    auto ro_par = RO_Partition<DIM>(par);
     return ro_par;
   }
   
@@ -825,6 +825,25 @@ namespace LegionSimplified {
   RW_Partition<DIM>::~RW_Partition(void)
   {
   }
+  
+  template <size_t DIM>
+  WD_Region<DIM> RW_Partition<DIM>::get_wd_subregion_by_color(int color)
+  {
+    Legion::LogicalRegion sub_lr = this->base_region_impl->ctx.runtime->get_logical_subregion_by_color(this->base_region_impl->ctx.ctx, this->base_region_impl->logical_partition, color);
+    WD_Region<DIM> wd_region;
+    wd_region.deep_copy_base_region(*this, sub_lr);
+    return wd_region;
+  }
+  
+  template <size_t DIM>
+  RO_Region<DIM> RW_Partition<DIM>::get_ro_subregion_by_color(int color)
+  {
+    Legion::LogicalRegion sub_lr = this->base_region_impl->ctx.runtime->get_logical_subregion_by_color(this->base_region_impl->ctx.ctx, this->base_region_impl->logical_partition, color);
+    RO_Region<DIM> ro_region;
+    ro_region.deep_copy_base_region(*this, sub_lr);
+    return ro_region;
+  }
+
 /*  
   template <typename T, size_t DIM>
   T<DIM> RW_Partition<DIM>::get_subregion_by_color(int color)
@@ -839,8 +858,8 @@ namespace LegionSimplified {
   T<DIM> RW_Partition<DIM>::operator [](int color)
   {
     return get_subregion_by_color<T<DIM>>(color);
-  }*/
-  
+  }
+  */
   
   /////////////////////////////////////////////////////////////
   // UserTask 
