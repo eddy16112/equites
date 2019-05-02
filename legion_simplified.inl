@@ -441,6 +441,15 @@ namespace LegionSimplified {
     return (*acc)[i];
   }
   
+  template <size_t DIM>
+  RO_Partition<DIM> RO_Region<DIM>::create_ro_partition(enum partition_type p_type, IdxSpace<DIM> &ispace)
+  {
+    Region<DIM> r = Base_Region<DIM>::get_region();
+    Partition<DIM> par(equal, r, ispace);
+    RO_Partition<DIM> ro_par = RO_Partition<DIM>(par);
+    return ro_par;
+  }
+  
   //----------------------------------protected-------------------------------------
   template <size_t DIM>
   void RO_Region<DIM>::init_ro_parameters(void)
@@ -529,6 +538,15 @@ namespace LegionSimplified {
     assert(this->base_region_impl->accessor_map.size() == 1);
     Legion::FieldAccessor<WRITE_DISCARD, a, DIM> *acc = get_default_accessor<a>();
     (*acc)[i] = x; 
+  }
+  
+  template <size_t DIM>
+  WD_Partition<DIM> WD_Region<DIM>::create_wd_partition(enum partition_type p_type, IdxSpace<DIM> &ispace)
+  {
+    Region<DIM> r = Base_Region<DIM>::get_region();
+    Partition<DIM> par(equal, r, ispace);
+    WD_Partition<DIM> wd_par = WD_Partition<DIM>(par);
+    return wd_par;
   }
   
   //----------------------------------protected-------------------------------------
@@ -647,8 +665,26 @@ namespace LegionSimplified {
   {
     Region<DIM> r = Base_Region<DIM>::get_region();
     Partition<DIM> par(equal, r, ispace);
-    auto ro_par = RO_Partition<DIM>(par);
+    RO_Partition<DIM> ro_par = RO_Partition<DIM>(par);
     return ro_par;
+  }
+  
+  template <size_t DIM>
+  WD_Partition<DIM> RW_Region<DIM>::create_wd_partition(enum partition_type p_type, IdxSpace<DIM> &ispace)
+  {
+    Region<DIM> r = Base_Region<DIM>::get_region();
+    Partition<DIM> par(equal, r, ispace);
+    WD_Partition<DIM> wd_par = WD_Partition<DIM>(par);
+    return wd_par;
+  }
+  
+  template <size_t DIM>
+  RW_Partition<DIM> RW_Region<DIM>::create_rw_partition(enum partition_type p_type, IdxSpace<DIM> &ispace)
+  {
+    Region<DIM> r = Base_Region<DIM>::get_region();
+    Partition<DIM> par(equal, r, ispace);
+    RW_Partition<DIM> rw_par = RW_Partition<DIM>(par);
+    return rw_par;
   }
   
   //----------------------------------protected-------------------------------------
@@ -827,6 +863,15 @@ namespace LegionSimplified {
   }
   
   template <size_t DIM>
+  RO_Region<DIM> RW_Partition<DIM>::get_ro_subregion_by_color(int color)
+  {
+    Legion::LogicalRegion sub_lr = this->base_region_impl->ctx.runtime->get_logical_subregion_by_color(this->base_region_impl->ctx.ctx, this->base_region_impl->logical_partition, color);
+    RO_Region<DIM> ro_region;
+    ro_region.deep_copy_base_region(*this, sub_lr);
+    return ro_region;
+  }
+  
+  template <size_t DIM>
   WD_Region<DIM> RW_Partition<DIM>::get_wd_subregion_by_color(int color)
   {
     Legion::LogicalRegion sub_lr = this->base_region_impl->ctx.runtime->get_logical_subregion_by_color(this->base_region_impl->ctx.ctx, this->base_region_impl->logical_partition, color);
@@ -836,16 +881,17 @@ namespace LegionSimplified {
   }
   
   template <size_t DIM>
-  RO_Region<DIM> RW_Partition<DIM>::get_ro_subregion_by_color(int color)
+  RW_Region<DIM> RW_Partition<DIM>::get_rw_subregion_by_color(int color)
   {
     Legion::LogicalRegion sub_lr = this->base_region_impl->ctx.runtime->get_logical_subregion_by_color(this->base_region_impl->ctx.ctx, this->base_region_impl->logical_partition, color);
-    RO_Region<DIM> ro_region;
-    ro_region.deep_copy_base_region(*this, sub_lr);
-    return ro_region;
+    RW_Region<DIM> rw_region;
+    rw_region.deep_copy_base_region(*this, sub_lr);
+    return rw_region;
   }
 
 /*  
-  template <typename T, size_t DIM>
+  template <size_t DIM>
+  template <typename T>
   T<DIM> RW_Partition<DIM>::get_subregion_by_color(int color)
   {
     Legion::LogicalRegion sub_lr = this->base_region_impl->ctx.runtime->get_logical_subregion_by_color(this->base_region_impl->ctx.ctx, this->base_region_impl->logical_partition, color);
@@ -854,12 +900,13 @@ namespace LegionSimplified {
     return wd_region;
   }
   
-  template <typename T, size_t DIM>
+  template <size_t DIM>
+  template <typename T>
   T<DIM> RW_Partition<DIM>::operator [](int color)
   {
     return get_subregion_by_color<T<DIM>>(color);
-  }
-  */
+  }*/
+  
   
   /////////////////////////////////////////////////////////////
   // UserTask 

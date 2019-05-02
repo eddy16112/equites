@@ -438,6 +438,7 @@ unsigned int references;
   
     void init_partition(Partition<DIM> &par);
   
+  
   private:  
     void init_region_internal(const context ctx, Legion::LogicalRegion lr, Legion::LogicalRegion lr_parent, std::vector<field_id_t> &task_field_id_vec);
     
@@ -448,7 +449,16 @@ unsigned int references;
     void check_empty(void);
     
   };
-
+  
+  
+  template <size_t DIM>
+  class RO_Partition;
+  
+  template <size_t DIM>
+  class WD_Partition;
+  
+  template <size_t DIM>
+  class RW_Partition;
 
   /**
    * \class RO_Region
@@ -470,6 +480,8 @@ unsigned int references;
   
     template< typename a>
     a read(Legion::Point<DIM> i);
+    
+    RO_Partition<DIM> create_ro_partition(enum partition_type p_type, IdxSpace<DIM> &ispace);
     
   protected: 
     void init_ro_parameters(void);
@@ -503,6 +515,8 @@ unsigned int references;
     template< typename a>
     void write(Legion::Point<DIM> i, a x);
     
+    WD_Partition<DIM> create_wd_partition(enum partition_type p_type, IdxSpace<DIM> &ispace);
+    
   protected:
     void init_wd_parameters(void);
   
@@ -513,9 +527,6 @@ unsigned int references;
     template< typename a>
     Legion::FieldAccessor<WRITE_DISCARD, a, DIM>* get_default_accessor(void);
   };
-  
-  template <size_t DIM>
-  class RO_Partition;
 
   /**
    * \class RW_Region
@@ -545,6 +556,10 @@ unsigned int references;
     void write(Legion::Point<DIM> i, a x);
     
     RO_Partition<DIM> create_ro_partition(enum partition_type p_type, IdxSpace<DIM> &ispace);
+    
+    WD_Partition<DIM> create_wd_partition(enum partition_type p_type, IdxSpace<DIM> &ispace);
+    
+    RW_Partition<DIM> create_rw_partition(enum partition_type p_type, IdxSpace<DIM> &ispace);
   
   protected:
     void init_rw_parameters(void);
@@ -602,12 +617,14 @@ unsigned int references;
   
     ~RW_Partition(void);
     
+    RO_Region<DIM> get_ro_subregion_by_color(int color);
+        
     WD_Region<DIM> get_wd_subregion_by_color(int color);
     
-    RO_Region<DIM> get_ro_subregion_by_color(int color);
+    RW_Region<DIM> get_rw_subregion_by_color(int color);
     
-    //template <typename T>
-    //T<DIM> get_subregion_by_color(int color);
+  //  template <typename T>
+  //  T<DIM> get_subregion_by_color(int color);
   };
 
 //-----------------------------------------------------------------------------
