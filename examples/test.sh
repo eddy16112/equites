@@ -8,3 +8,4 @@
 ./multiple_partitions 
 ./saxpy_subregion 
 ./sub_task
+./constructor

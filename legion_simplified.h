@@ -221,6 +221,11 @@ namespace LegionSimplified {
       return fu.get<T>();
     }
     template<typename T>
+    T get(const int &point)
+    { 
+      return get<T, 1>(makepoint(point));
+    }
+    template<typename T>
     T get(const Point<1> &point)
     { 
       return get<T, 1>(point);
@@ -264,6 +269,11 @@ namespace LegionSimplified {
     void set_point(const Point<DIM> &point, T val)
     {
       arg_map.set_point(point, Legion::TaskArgument(&val, sizeof(T)));
+    }
+    template<typename T>
+    void set_point(const int &point, T val)
+    {
+      set_point<T, 1>(makepoint(point), val);
     }
     template<typename T>
     void set_point(const Point<1> &point, T val)
@@ -400,7 +410,7 @@ unsigned int references;
         }
         return *this; 
       }
-      const Legion::Point<DIM>& operator*(void) const { return Legion::PointInDomainIterator<DIM>::operator*(); }
+      const Legion::Point<DIM> operator*(void) const { return Legion::PointInDomainIterator<DIM>::operator*(); }
       bool operator!=(const iterator& other) const
       { 
         if (is_valid == true && other.is_valid == true) {
